@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:alpine
+    container_name: hive-redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+  book-metadata:
+    build:
+      context: .
+      dockerfile: ./services/book-metadata/Dockerfile
+    container_name: book-metadata
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - GOOGLE_BOOKS_API_URL=${GOOGLE_BOOKS_API_URL}
+      - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+
+  user-data:
+    build:
+      context: .
+      dockerfile: ./services/user-data/Dockerfile
+    container_name: user-data
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DB_PATH=/usr/src/app/data/users.db
+    volumes:
+      - ./services/user-data/data:/usr/src/app/data
+
+  item-data:
+    build:
+      context: .
+      dockerfile: ./services/item-data/Dockerfile
+    container_name: item-data
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - DB_PATH=/usr/src/app/data/items.db
+    volumes:
+      - ./services/item-data/data:/usr/src/app/data
+
+  follower:
+    build:
+      context: .
+      dockerfile: ./services/follower/Dockerfile
+    container_name: follower
+    ports:
+      - "3004:3004"
+    environment:
+      - PORT=3004
+      - ITEM_DATA_URL=http://item-data:3002
+      - BOOK_METADATA_URL=http://book-metadata:3003
+
+  recommendation:
+    build:
+      context: .
+      dockerfile: ./services/recommendation/Dockerfile
+    container_name: recommendation
+    ports:
+      - "3005:3005"
+    environment:
+      - PORT=3005
+      - ITEM_DATA_URL=http://item-data:3002
+      - BOOK_METADATA_URL=http://book-metadata:3003
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: ./services/orchestrator/Dockerfile
+    container_name: orchestrator
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./client:/usr/src/app/client
+    environment:
+      - PORT=3000
+      - USER_DATA_URL=http://user-data:3001
+      - ITEM_DATA_URL=http://item-data:3002
+      - BOOK_METADATA_URL=http://book-metadata:3003
+      - RECOMMENDATION_URL=http://recommendation:3005
+      - FOLLOWER_URL=http://follower:3004
+    depends_on:
+      - user-data
+      - item-data
+      - book-metadata
+      - recommendation
+      - follower

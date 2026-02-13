@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Hive Books</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body class="bg-gray-900 text-white flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
+        <div class="p-6">
+            <h1 class="text-2xl font-bold text-indigo-400">Hive Books</h1>
+        </div>
+
+        <nav class="flex-1 px-4 space-y-2">
+            <a href="index.html" class="flex items-center px-4 py-3 bg-indigo-600 text-white rounded-lg">
+                <i class="fas fa-home w-6"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="search.html"
+                class="flex items-center px-4 py-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
+                <i class="fas fa-search w-6"></i>
+                <span>Search</span>
+            </a>
+            <a href="discovery.html"
+                class="flex items-center px-4 py-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
+                <i class="fas fa-compass w-6"></i>
+                <span>Discovery</span>
+            </a>
+            <a href="new-releases.html"
+                class="flex items-center px-4 py-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
+                <i class="fas fa-calendar-alt w-6"></i>
+                <span>New Releases</span>
+            </a>
+        </nav>
+
+        <div class="p-4 border-t border-gray-700">
+            <a href="login.html" class="flex items-center px-4 py-3 text-gray-400 hover:text-red-400 transition">
+                <i class="fas fa-sign-out-alt w-6"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-8 relative">
+        <header class="flex justify-between items-center mb-10">
+            <h2 class="text-3xl font-bold">My Library</h2>
+            <div class="flex space-x-2">
+                <button id="viewTable" class="bg-gray-800 p-2 rounded hover:bg-gray-700"><i
+                        class="fas fa-list"></i></button>
+                <button id="viewGrid" class="bg-gray-700 p-2 rounded hover:bg-gray-600"><i
+                        class="fas fa-th-large"></i></button>
+            </div>
+        </header>
+
+        <!-- Library Content -->
+        <div id="libraryContainer">
+            <!-- Message if empty -->
+            <div id="emptyMessage" class="flex flex-col items-center justify-center h-64 text-gray-500">
+                <i class="fas fa-book-open text-6xl mb-4"></i>
+                <p class="text-xl">Your library is empty.</p>
+                <p>Click the + button to add your first book!</p>
+            </div>
+
+            <!-- Grid View -->
+            <div id="gridView" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 hidden">
+                <!-- Book Cards (injected) -->
+            </div>
+
+            <!-- Table View -->
+            <div id="tableView" class="overflow-x-auto hidden">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-gray-700">
+                            <th class="py-4 px-2">Cover</th>
+                            <th class="py-4 px-2">Title</th>
+                            <th class="py-4 px-2">Author</th>
+                            <th class="py-4 px-2">ISBN</th>
+                            <th class="py-4 px-2"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Table rows (injected) -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Action Button -->
+        <a href="search.html"
+            class="fixed bottom-10 right-10 bg-indigo-600 hover:bg-indigo-700 w-16 h-16 rounded-full flex items-center justify-center shadow-2xl transition transform hover:scale-110 active:scale-95">
+            <i class="fas fa-plus text-2xl"></i>
+        </a>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log
+image-cache
+.env
+.git
+.vscode
+*.sqlite
+data/*.db
+proxy-error.log

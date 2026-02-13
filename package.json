@@ -1,0 +1,36 @@
+{
+    "name": "hive-books-root",
+    "version": "1.0.0",
+    "description": "Root management for Hive Books microservices",
+    "scripts": {
+        "concurrent:pretty": "npx concurrently -n \"ORCHESTRATOR,USER_DATA,ITEM_DATA,BOOK_METADATA,RECOMMENDATION,FOLLOWER\" -c \"bgBlue,bgGreen,bgMagenta,bgCyan,bgYellow,bgRed\"",
+        "install:all": "npm install && npm run install:services",
+        "install:services": "npm run concurrent:pretty \"npm run install:orchestrator\" \"npm run install:user-data\" \"npm run install:item-data\" \"npm run install:book-metadata\" \"npm run install:recommendation\" \"npm run install:follower\"",
+        "install:orchestrator": "cd services/orchestrator && npm install",
+        "install:user-data": "cd services/user-data && npm install",
+        "install:item-data": "cd services/item-data && npm install",
+        "install:book-metadata": "cd services/book-metadata && npm install",
+        "install:recommendation": "cd services/recommendation && npm install",
+        "install:follower": "cd services/follower && npm install",
+        "start": "npm run concurrent:pretty \"npm run orchestrator\" \"npm run user-data\" \"npm run item-data\" \"npm run book-metadata\" \"npm run recommendation\" \"npm run follower\"",
+        "dev": "npm run concurrent:pretty \"npm run orchestrator:dev\" \"npm run user-data:dev\" \"npm run item-data:dev\" \"npm run book-metadata:dev\" \"npm run recommendation:dev\" \"npm run follower:dev\"",
+        "orchestrator": "cd services/orchestrator && npm start",
+        "orchestrator:dev": "cd services/orchestrator && npm run dev",
+        "user-data": "cd services/user-data && npm start",
+        "user-data:dev": "cd services/user-data && npm run dev",
+        "item-data": "cd services/item-data && npm start",
+        "item-data:dev": "cd services/item-data && npm run dev",
+        "book-metadata": "cd services/book-metadata && npm start",
+        "book-metadata:dev": "cd services/book-metadata && npm run dev",
+        "recommendation": "cd services/recommendation && npm start",
+        "recommendation:dev": "cd services/recommendation && npm run dev",
+        "follower": "cd services/follower && npm start",
+        "follower:dev": "cd services/follower && npm run dev"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    },
+    "dependencies": {
+        "all": "^0.0.0"
+    }
+}

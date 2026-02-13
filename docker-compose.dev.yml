@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  book-metadata:
+    command: npm run dev
+    volumes:
+      - ./services/book-metadata/src:/usr/src/app/src
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+
+  user-data:
+    command: npm run dev
+    volumes:
+      - ./services/user-data/src:/usr/src/app/src
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+
+  item-data:
+    command: npm run dev
+    volumes:
+      - ./services/item-data/src:/usr/src/app/src
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+
+  follower:
+    command: npm run dev
+    volumes:
+      - ./services/follower/src:/usr/src/app/src
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+
+  recommendation:
+    command: npm run dev
+    volumes:
+      - ./services/recommendation/src:/usr/src/app/src
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+
+  orchestrator:
+    command: npm run dev
+    volumes:
+      - ./services/orchestrator/src:/usr/src/app/src
+      - ./client:/usr/src/app/client
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true

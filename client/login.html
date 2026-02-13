@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Hive Books</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen">
+    <div class="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-md border border-gray-700">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-indigo-400">Hive Books</h1>
+            <p class="text-gray-400">Virtual Library Platform</p>
+        </div>
+
+        <!-- Login Form -->
+        <div id="loginSection">
+            <h2 class="text-xl font-semibold mb-6 text-center">Inizia la tua avventura</h2>
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label for="email" class="block text-sm font-medium text-gray-300">Email</label>
+                    <input type="email" id="email" required
+                        class="mt-1 block w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition">
+                </div>
+
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-300">Password</label>
+                    <input type="password" id="password" required
+                        class="mt-1 block w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition">
+                </div>
+
+                <button type="submit"
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 transform hover:scale-[1.02] shadow-lg">
+                    Sign In
+                </button>
+            </form>
+            <div class="mt-6 text-center text-sm text-gray-400">
+                Non hai un account? <a href="#" id="showRegister"
+                    class="text-indigo-400 hover:text-indigo-300 font-semibold">Registrati</a>
+            </div>
+        </div>
+
+        <!-- Register Form -->
+        <div id="registerSection" class="hidden">
+            <h2 class="text-xl font-semibold mb-6 text-center">Crea un nuovo profilo</h2>
+            <form id="registerForm" class="space-y-4">
+                <div>
+                    <label for="regName" class="block text-sm font-medium text-gray-300">Nome</label>
+                    <input type="text" id="regName" required
+                        class="mt-1 block w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition">
+                </div>
+
+                <div>
+                    <label for="regEmail" class="block text-sm font-medium text-gray-300">Email</label>
+                    <input type="email" id="regEmail" required
+                        class="mt-1 block w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition">
+                </div>
+
+                <div>
+                    <label for="regPassword" class="block text-sm font-medium text-gray-300">Password</label>
+                    <input type="password" id="regPassword" required
+                        class="mt-1 block w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition">
+                </div>
+
+                <button type="submit"
+                    class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 transform hover:scale-[1.02] shadow-lg">
+                    Crea Account
+                </button>
+            </form>
+            <div class="mt-6 text-center text-sm text-gray-400">
+                Hai già un account? <a href="#" id="showLogin"
+                    class="text-indigo-400 hover:text-indigo-300 font-semibold">Accedi</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
