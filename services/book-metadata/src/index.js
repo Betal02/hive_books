@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 const { createClient } = require('redis');
 const Bottleneck = require('bottleneck');
-const { normalizeGoogleBook } = require('./utils');
+const { normalizeGoogleBook, normalizeNYTBook } = require('./utils');
 
 const app = express();
 const PORT = process.env.PORT || 3003;
@@ -56,6 +56,10 @@ async function fetchWithRetry(url, retries = 3) { //TODO move in utils.js?
     }
 }
 
+/**
+ * Google Books API
+ */
+
 // Search books by query
 app.get('/search', async (req, res) => {
     const { q } = req.query;
@@ -78,15 +82,16 @@ app.get('/search', async (req, res) => {
     }
 });
 
-// Lookup book by ISBN
+// Search book by ISBN
 app.get('/isbn/:isbn', async (req, res) => {
     const { isbn } = req.params;
 
     try {
-        const response = await axios.get(process.env.GOOGLE_BOOKS_API_URL, { //TODO max 1
+        const response = await axios.get(process.env.GOOGLE_BOOKS_API_URL, {
             params: {
                 q: `isbn:${isbn}`,
-                key: process.env.GOOGLE_BOOKS_API_KEY || undefined
+                key: process.env.GOOGLE_BOOKS_API_KEY || undefined,
+                maxResults: 1
             }
         });
 
@@ -95,12 +100,62 @@ app.get('/isbn/:isbn', async (req, res) => {
 
         res.json(normalizeGoogleBook(items[0]));
     } catch (error) {
-        console.error('[METADATA] Failed to fetch data from external API:', error.message);
-        res.status(500).json({ error: 'Failed to fetch data from external API' });
+        console.error('[METADATA] Failed to fetch data from Google Books API:', error.message);
+        res.status(500).json({ error: 'Failed to fetch data from Google Books API' });
     }
 });
 
-// Image Proxy with Redis Cache
+/**
+ * NYT API
+ */
+app.get('/nyt/:category', async (req, res) => {
+    const listNames = {
+        fiction: 'hardcover-fiction',
+        nonfiction: 'hardcover-nonfiction',
+        business: 'business-books',
+        manga: 'graphic-books-and-manga',
+        ya: 'young-adult-hardcover',
+        combined: 'combined-print-and-e-book-fiction'
+    };
+
+    const categoryNames = {
+        'hardcover-fiction': 'Fiction',
+        'hardcover-nonfiction': 'Non Fiction',
+        'business-books': 'Business',
+        'graphic-books-and-manga': 'Manga',
+        'young-adult-hardcover': 'Young Adult',
+        'combined-print-and-e-book-fiction': 'Combined'
+    };
+
+    const listName = listNames[req.params.category];
+
+    if (!listName) {
+        return res.status(400).json({ message: 'Invalid NYT category' });
+    }
+
+    try {
+        const response = await axios.get(
+            `${process.env.NYT_API_URL}${listName}.json`,
+            {
+                params: {
+                    'api-key': process.env.NYT_API_KEY
+                }
+            }
+        );
+
+        const items = response.data.results.books || [];
+        const normalized = items.map(item => normalizeNYTBook(item, categoryNames[listName]));
+        res.json(normalized);
+    } catch (error) {
+        console.error('[METADATA] Failed to fetch data from NYT API:', error.message);
+        res.status(500).json({ message: 'Failed to fetch data from NYT API', error: error.message });
+    }
+});
+
+
+/**
+ * Image Proxy (with Redis)
+ */
 app.get('/proxy-image', async (req, res) => {
     const imageUrl = req.query.url;
     if (!imageUrl) return res.status(400).send('URL is required');

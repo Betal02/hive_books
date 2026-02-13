@@ -32,7 +32,7 @@ app.get('/recommendations/:user_id', async (req, res) => {
 
         if (books.length === 0) {
             // Return popular books if library is empty
-            const popularRes = await axios.get(`${process.env.BOOK_METADATA_URL}/search?q=subject:fiction`); //TODO implement exception handling and find a dedicated endpoint for popular books
+            const popularRes = await axios.get(`${process.env.BOOK_METADATA_URL}/nyt/fiction`); //TODO implement exception handling and find a dedicated endpoint for popular books
             return res.json(popularRes.data.slice(0, 10));
         }
 

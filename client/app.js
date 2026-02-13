@@ -215,13 +215,14 @@ async function performSearch(query) {
     // Show loading spinner
     resultsList.innerHTML = '<div class="text-center py-10"><i class="fas fa-spinner fa-spin text-3xl"></i></div>';
 
+    const no_results_message = `<p class="text-gray-400">No results found for "${query}".</p>`;
+
     // Fetch and show search results
     try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
         const results = await res.json();
 
-        //TODO se results è vuoto, mostrare scritta "nessun risultato nessun risultato per "query""
-        resultsList.innerHTML = results.map(book => `
+        resultsList.innerHTML = results.length === 0 ? no_results_message : results.map(book => `
             <div class="bg-gray-800 p-4 rounded-xl flex items-center border border-gray-700 hover:border-indigo-500 transition group">
                 ${renderThumbnail(book.thumbnail, 'w-16 h-24 rounded shadow-lg mr-6')}
                 <div class="flex-1 min-w-0">
@@ -236,7 +237,8 @@ async function performSearch(query) {
             </div>
         `).join('');
     } catch (err) {
-        resultsList.innerHTML = '<p class="text-red-400">Failed to fetch results.</p>'; //TODO notify user error, scritta nessun risultato per "query"
+        showToast('Failed to fetch search results. Unexpected error: ' + err.message, 'error');
+        resultsList.innerHTML = no_results_message;
     }
 }
 
@@ -394,6 +396,7 @@ function createBookCard(book, showRemove = false) {
 function showToast(message, type = "success", duration = 4000) {
     const container = document.getElementById("toastContainer");
 
+    // Toast type styling
     let wrapper = "bg-green-50 border-green-400 text-green-800";
     let icon = "fas fa-circle-check text-green-500";
     if (type === "error") {
@@ -410,8 +413,8 @@ function showToast(message, type = "success", duration = 4000) {
         icon = "fas fa-circle-question text-gray-500";
     }
 
+    // Create toast
     const toast = document.createElement("div");
-
     toast.innerHTML = `
         <div class="pointer-events-auto w-80 border-l-4 ${wrapper} shadow-lg rounded-lg p-4 flex items-start gap-3 animate-fade-in transition">
             <i class="${icon} mt-1"></i>
@@ -423,7 +426,6 @@ function showToast(message, type = "success", duration = 4000) {
             </button>
         </div>
     `;
-
     container.appendChild(toast);
 
     // Manual close

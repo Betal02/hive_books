@@ -19,6 +19,8 @@ services:
       - PORT=3003
       - GOOGLE_BOOKS_API_URL=${GOOGLE_BOOKS_API_URL}
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY}
+      - NYT_API_URL=${NYT_API_URL}
+      - NYT_API_KEY=${NYT_API_KEY}
       - REDIS_URL=redis://redis:6379
     depends_on:
       - redis

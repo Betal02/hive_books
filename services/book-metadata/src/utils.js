@@ -17,4 +17,19 @@ function normalizeGoogleBook(item) {
     };
 }
 
-module.exports = { normalizeGoogleBook };
+function normalizeNYTBook(item, genre) {
+    const isbnObj = item.primary_isbn13 ||
+        item.primary_isbn10;
+
+    return {
+        isbn: isbnObj,
+        title: item.title || 'Unknown Title',
+        author: item.author || 'Unknown Author',
+        thumbnail: item.book_image || null,
+        genre: genre || null,
+        year: item.created_date ? item.created_date.split('-')[0] : null,
+        description: item.description || ''
+    };
+}
+
+module.exports = { normalizeGoogleBook, normalizeNYTBook };
