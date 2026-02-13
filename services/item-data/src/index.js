@@ -105,6 +105,6 @@ app.delete('/books/:id', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Item Data Service running on port ${PORT}`); //TODO: standardize logs and allow in dev mode?
-  console.log(`GraphiQL available at http://localhost:${PORT}/graphiql`); //TODO: standardize logs and allow in dev mode?
+  console.log(`[ITEM-DATA] Item Data Service running on port ${PORT}`);
+  console.log(`[ITEM-DATA] GraphiQL available at http://localhost:${PORT}/graphiql`);
 });

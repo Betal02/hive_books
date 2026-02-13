@@ -74,5 +74,5 @@ app.get('/users/:id', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`User Data Service running on port ${PORT}`); //TODO: standardize logs and allow in dev mode?
+    console.log(`[USER-DATA] User Data Service running on port ${PORT}`);
 });

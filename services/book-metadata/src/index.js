@@ -22,8 +22,8 @@ const redisClient = createClient({
     url: process.env.REDIS_URL || 'redis://localhost:6379'
 });
 
-redisClient.on('error', (err) => console.error('Redis Client Error', err)); //TODO standardize logging?
-redisClient.connect().then(() => console.log('Connected to Redis')); //TODO standardize logging?
+redisClient.on('error', (err) => console.error('[METADATA][REDIS] Failed to connect to Redis', err));
+redisClient.connect().then(() => console.log('[METADATA][REDIS] Connected to Redis'));
 
 // Bottleneck for Google Books API (Rate Limiting)
 const limiter = new Bottleneck({
@@ -48,7 +48,7 @@ async function fetchWithRetry(url, retries = 3) { //TODO move in utils.js?
         }));
     } catch (err) {
         if (err.response?.status === 429 && retries > 0) {
-            console.warn(`Rate limit hit for ${url}, retrying in 1s... (${retries} retries left)`); //TODO standardize logging?
+            console.warn(`[METADATA] Rate limit hit for ${url}, retrying in 1s... (${retries} retries left)`);
             await new Promise(r => setTimeout(r, 1000));
             return fetchWithRetry(url, retries - 1);
         }
@@ -59,7 +59,7 @@ async function fetchWithRetry(url, retries = 3) { //TODO move in utils.js?
 // Search books by query
 app.get('/search', async (req, res) => {
     const { q } = req.query;
-    if (!q) return res.status(400).json({ error: 'Query parameter q is required OOOOOOOOOOOHHHHHHHHHS' });
+    if (!q) return res.status(400).json({ error: 'Query parameter q is required' });
 
     try {
         const response = await axios.get(process.env.GOOGLE_BOOKS_API_URL, {
@@ -73,7 +73,7 @@ app.get('/search', async (req, res) => {
         const normalized = items.map(normalizeGoogleBook);
         res.json(normalized);
     } catch (error) {
-        console.error('Google Books API Error:', error.message); //TODO standardize logging?
+        console.error('[METADATA] Failed to fetch data from Google Books API:', error.message);
         res.status(500).json({ message: 'Failed to fetch data from Google Books API', error: error.message });
     }
 });
@@ -95,7 +95,7 @@ app.get('/isbn/:isbn', async (req, res) => {
 
         res.json(normalizeGoogleBook(items[0]));
     } catch (error) {
-        console.error('Google Books API Error:', error.message); //TODO standardize logging?
+        console.error('[METADATA] Failed to fetch data from external API:', error.message);
         res.status(500).json({ error: 'Failed to fetch data from external API' });
     }
 });
@@ -119,17 +119,17 @@ app.get('/proxy-image', async (req, res) => {
 
                 // Validate JPEG magic bytes (FF D8)
                 if (buffer.length > 2 && buffer[0] === 0xFF && buffer[1] === 0xD8) {
-                    console.log(`[PROXY] Cache Hit: ${urlHash} (${buffer.length} bytes)`); //TODO standardize logging?
+                    console.log(`[METADATA][REDIS] Cache Hit: ${urlHash} (${buffer.length} bytes)`);
                     return res.type('image/jpeg').send(buffer);
                 }
-                console.warn(`[PROXY] Corrupted image in cache for ${urlHash}, re-fetching...`); //TODO standardize logging?
+                console.warn(`[METADATA][REDIS] Corrupted image in cache for ${urlHash}, re-fetching...`);
             } catch (e) {
-                console.warn(`[PROXY] Cache decoding error for ${urlHash}:`, e.message); //TODO standardize logging?
+                console.warn(`[METADATA][REDIS] Cache decoding error for ${urlHash}:`, e.message);
             }
         }
 
         // Fetch from source
-        console.log(`[PROXY] Cache Miss: Fetching ${imageUrl}`); //TODO standardize logging?
+        console.log(`[METADATA][REDIS] Cache Miss: Fetching ${imageUrl}`);
         const response = await fetchWithRetry(imageUrl);
         const buffer = Buffer.from(response.data);
 
@@ -141,7 +141,7 @@ app.get('/proxy-image', async (req, res) => {
         res.type('image/jpeg').send(buffer);
 
     } catch (error) {
-        console.error('[PROXY] Error:', error.message); //TODO standardize logging?
+        console.error('[METADATA][REDIS] Error:', error.message);
         if (!res.headersSent) {
             const status = error.response?.status || 500;
             res.status(status).send('Failed to fetch image');
@@ -150,5 +150,5 @@ app.get('/proxy-image', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Book Metadata Adapter running on port ${PORT}`); //TODO standardize logging?
+    console.log(`[METADATA] Book Metadata Adapter running on port ${PORT}`);
 });

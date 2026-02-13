@@ -30,7 +30,7 @@ app.get('/new-releases/:user_id', async (req, res) => {
     // Check cache
     const cachedData = cache.get(user_id);
     if (cachedData && (Date.now() - cachedData.timestamp < CACHE_TTL)) {
-        console.log(`Serving cached releases for user ${user_id}`); //TODO standardize logging?
+        console.log(`[FOLLOWER] Serving cached releases for user ${user_id}`);
         return res.json(cachedData.data);
     }
 
@@ -66,11 +66,11 @@ app.get('/new-releases/:user_id', async (req, res) => {
 
         res.json(newReleases);
     } catch (error) {
-        console.error('Follower Service Error:', error.message); //TODO standardize logging?
+        console.error('[FOLLOWER] Failed to fetch new releases:', error.message);
         res.status(500).json({ error: 'Failed to fetch new releases' });
     }
 });
 
 app.listen(PORT, () => {
-    console.log(`Follower Service running on port ${PORT}`); //TODO standardize logging?
+    console.log(`[FOLLOWER] Follower Service running on port ${PORT}`);
 });

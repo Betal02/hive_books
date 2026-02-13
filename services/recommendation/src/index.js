@@ -49,11 +49,11 @@ app.get('/recommendations/:user_id', async (req, res) => {
 
         res.json(recommendations.slice(0, 10));
     } catch (error) {
-        console.error('Recommendation Error:', error.message);
+        console.error('[RECOMMENDATION] Failed to generate recommendations:', error.message);
         res.status(500).json({ error: 'Failed to generate recommendations' });
     }
 });
 
 app.listen(PORT, () => {
-    console.log(`Recommendation Service running on port ${PORT}`);
+    console.log(`[RECOMMENDATION] Recommendation Service running on port ${PORT}`);
 });

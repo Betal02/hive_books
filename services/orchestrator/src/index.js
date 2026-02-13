@@ -134,7 +134,7 @@ app.get('/api/proxy-image', async (req, res) => {
   // Fetch book thumbnail from Book Metadata service
   try {
     const metadataUrl = `${process.env.BOOK_METADATA_URL}/proxy-image`;
-    console.log(`[ORCHESTRATOR] Proxying to: ${metadataUrl} with url=${url}`); //TODO: standardize logs and allow in dev mode?
+    console.log(`[ORCHESTRATOR] Proxying to: ${metadataUrl} with url=${url}`);
 
     const response = await axios.get(metadataUrl, {
       params: req.query,
@@ -145,7 +145,7 @@ app.get('/api/proxy-image', async (req, res) => {
     res.setHeader('Content-Type', 'image/jpeg');
     res.send(Buffer.from(response.data));
   } catch (e) {
-    console.error('[ORCHESTRATOR PROXY ERROR]:', e.message); //TODO: standardize logs and allow in dev mode?
+    console.error('[ORCHESTRATOR] Failed to fetch image:', e.message);
     const status = e.response?.status || 500;
 
     // If responseType was 'stream', e.response.data is a stream.
@@ -153,7 +153,7 @@ app.get('/api/proxy-image', async (req, res) => {
       let errorBody = '';
       e.response.data.on('data', chunk => { errorBody += chunk.toString(); });
       e.response.data.on('end', () => {
-        console.error('[ORCHESTRATOR PROXY REMOTE ERROR]:', errorBody); //TODO: standardize logs and allow in dev mode?
+        console.error('[ORCHESTRATOR] Failed to fetch image:', errorBody);
         try {
           // Try to parse if it's JSON from our metadata service
           const parsed = JSON.parse(errorBody);
@@ -177,5 +177,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Orchestrator Service running on port ${PORT}`); //TODO: standardize logs and allow in dev mode?
+  console.log(`[ORCHESTRATOR] Orchestrator Service running on port ${PORT}`);
 });

@@ -8,7 +8,7 @@ const State = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('Hive Books Client Initialized');
+    console.log('[CLIENT] Hive Books Client Initialized');
 
     // Check Auth
     if (!State.user && !window.location.pathname.includes('login.html')) {
@@ -72,7 +72,7 @@ function initAuth() {
                 localStorage.setItem('hive_user', JSON.stringify(user));
                 window.location.href = 'index.html';
             } catch (err) {
-                alert(err.message); //TODO alert -> notifica bottom-right
+                showToast('Failed to login. Unexpected error: ' + err.message, 'error');
             }
         });
     }
@@ -99,10 +99,10 @@ function initAuth() {
 
                 const user = await res.json();
                 localStorage.setItem('hive_user', JSON.stringify(user));
-                alert('Account creato con successo!'); //TODO alert -> notifica bottom-right success
+                showToast('Account created successfully!');
                 window.location.href = 'index.html';
             } catch (err) {
-                alert(err.message); //TODO alert -> notifica bottom-right
+                showToast('Failed to register. Unexpected error: ' + err.message, 'error');
             }
         });
     }
@@ -146,7 +146,7 @@ async function initDashboard() {
         State.library = books;
         renderLibrary();
     } catch (err) {
-        console.error('Failed to fetch library', err); //TODO also notify user
+        showToast('Failed to fetch library. Unexpected error: ' + err.message, 'error');
     }
 }
 
@@ -273,7 +273,7 @@ async function loadDiscovery(elementId) {
         const books = await res.json();
         grid.innerHTML = books.slice(0, 10).map(book => createBookCard(book)).join('');
     } catch (err) {
-        console.error('Discovery load failed', err); //TODO notify user error
+        showToast('Failed to load discovery. Unexpected error: ' + err.message, 'error');
     }
 }
 
@@ -292,9 +292,9 @@ async function addBook(book) {
         });
 
         if (!res.ok) throw new Error('Failed to add book');
-        alert('Book added to library!'); //TODO notify user success
+        showToast('Book added to library!');
     } catch (err) {
-        alert(err.message); //TODO notify user error
+        showToast('Failed to add book. Unexpected error: ' + err.message, 'error');
     }
 }
 
@@ -305,9 +305,9 @@ async function removeBook(bookId) {
         await fetch(`/api/books/${bookId}`, { method: 'DELETE' });
         State.library = State.library.filter(b => b.id !== bookId);
         renderLibrary();
-        //TODO notify user success
+        showToast('Book removed from library!');
     } catch (err) {
-        alert('Failed to remove book'); //TODO notify user error
+        showToast('Failed to remove book. Unexpected error: ' + err.message, 'error');
     }
 }
 
@@ -355,7 +355,7 @@ function renderThumbnail(thumbnail, classes = 'w-full h-full', color = 'text-ind
             <img src="${proxyUrl}" 
                  class="absolute inset-0 w-full h-full object-cover transition-opacity duration-500 opacity-0"
                  onload="this.classList.remove('opacity-0')"
-                 onerror="console.error('Failed to load thumbnail:', this.src); this.parentElement.classList.add('border', 'border-red-500')"
+                 onerror="console.error('[CLIENT] Failed to load thumbnail:', this.src); this.parentElement.classList.add('border', 'border-red-500')"
                  loading="lazy">
         </div>
     `;
@@ -389,6 +389,52 @@ function createBookCard(book, showRemove = false) {
             </div>
         </div>
     `;
+}
+
+function showToast(message, type = "success", duration = 4000) {
+    const container = document.getElementById("toastContainer");
+
+    let wrapper = "bg-green-50 border-green-400 text-green-800";
+    let icon = "fas fa-circle-check text-green-500";
+    if (type === "error") {
+        wrapper = "bg-red-50 border-red-400 text-red-800";
+        icon = "fas fa-circle-xmark text-red-500";
+    } else if (type === "warning") {
+        wrapper = "bg-yellow-50 border-yellow-400 text-yellow-800";
+        icon = "fas fa-circle-exclamation text-yellow-500";
+    } else if (type === "info") {
+        wrapper = "bg-blue-50 border-blue-400 text-blue-800";
+        icon = "fas fa-circle-info text-blue-500";
+    } else if (type !== "success") {
+        wrapper = "bg-gray-50 border-gray-400 text-gray-800";
+        icon = "fas fa-circle-question text-gray-500";
+    }
+
+    const toast = document.createElement("div");
+
+    toast.innerHTML = `
+        <div class="pointer-events-auto w-80 border-l-4 ${wrapper} shadow-lg rounded-lg p-4 flex items-start gap-3 animate-fade-in transition">
+            <i class="${icon} mt-1"></i>
+            <div class="flex-1 text-sm font-medium">
+                ${message}
+            </div>
+            <button class="ml-2 text-gray-400 hover:text-gray-600">
+                <i class="fas fa-xmark"></i>
+            </button>
+        </div>
+    `;
+
+    container.appendChild(toast);
+
+    // Manual close
+    toast.querySelector("button").onclick = () => {
+        toast.remove();
+    };
+
+    // Automatic close
+    setTimeout(() => {
+        toast.remove();
+    }, duration);
 }
 
 // Global onclick handlers

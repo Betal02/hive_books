@@ -5,9 +5,9 @@ require('dotenv').config();
 const dbPath = path.resolve(__dirname, '..', process.env.DB_PATH || './library.sqlite');
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
-    console.error('Error opening database', err.message); //TODO: standardize logs and allow in dev mode?
+    console.error('[ITEM-DATA] Error opening database', err.message);
   } else {
-    console.log(`Item Database connected at ${dbPath}`); //TODO: standardize logs and allow in dev mode?
+    console.log(`[ITEM-DATA] Item Database connected at ${dbPath}`);
 
     // Initialize schema
     db.serialize(() => {
