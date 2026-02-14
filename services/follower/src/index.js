@@ -18,7 +18,7 @@ const axios = require('axios');
 // In-memory cache
 const cache = new Map();
 //const CACHE_TTL = (process.env.CACHE_TTL_MINUTES || 60) * 60 * 1000; TODO use this after DEV
-const CACHE_TTL = 1000;
+const CACHE_TTL = 30000;
 
 // Health Check
 app.get('/health', (req, res) => {

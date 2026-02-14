@@ -39,21 +39,6 @@ app.get('/recommendations/:user_id', async (req, res) => {
             .sort((a, b) => b[1] - a[1])
             .map(entry => entry[0]);
 
-        /* // Return generic popular books if library is too small
-            if (rankedGenre.length <= 3) {
-                const popularFiction = await axios.get(`${process.env.BOOK_METADATA_URL}/nyt/fiction`); //TODO implement exception handling and find a dedicated endpoint for popular books
-                const popularNonFiction = await axios.get(`${process.env.BOOK_METADATA_URL}/nyt/nonfiction`);
-                const popularBusiness = await axios.get(`${process.env.BOOK_METADATA_URL}/nyt/business`);
-                const popularManga = await axios.get(`${process.env.BOOK_METADATA_URL}/nyt/manga`);
-                const popularYA = await axios.get(`${process.env.BOOK_METADATA_URL}/nyt/ya`);
-                return res.json(
-                    popularFiction.data.slice(0, 5)
-                        .concat(popularNonFiction.data.slice(0, 5))
-                        .concat(popularBusiness.data.slice(0, 5))
-                        .concat(popularManga.data.slice(0, 5))
-                        .concat(popularYA.data.slice(0, 5))
-                ); */
-
         // Return generic popular books if library is too small or no genres found
         if (sortedGenres.length < 3) {
             const categories = ['fiction', 'nonfiction', 'business', 'manga', 'ya'];
