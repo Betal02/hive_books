@@ -52,69 +52,84 @@ hive_books/
 
 
 ```mermaid
+
 flowchart TD
-	UI[Client UI]
-	
-	OS[Orchestrator Service]
-	RS[Recommendation Service]
-	MA[Book Metadata Service]
-	FS[Follower Service]
-	IDS[Item Data Service]
-	UDS[User Data Service]
-	
-	IDB[(Item DB - SQLite)]
-	UDB[(User DB - SQLite)]
-	
-    R[(Redis Cache)]
-	IMC[("In-memory Cache")]
-	
-	GBA[Google Books API]
-	NYT[New York Times API]
-    
-	
-	IDS --> IDB
-	UDS --> UDB
-	UI -->|REST + JWT| OS
-	
-	OS -->|REST| UDS
-	OS -->|REST| IDS
-	OS -->|REST| MA
-	OS -->|REST| RS
-	OS -->|REST| FS
-	
-	RS -->|REST| IDS
-	RS -->|REST| MA
-	
-	FS -->|REST| IDS
-	FS -->|REST| MA
-	FS <--> IMC
-	
-	MA -->|REST| GBA
-	MA -->|REST| NYT
-	MA <--> R
+
+    UI[Client UI]
+
+    subgraph "Process Centric Layer"
+        OS[Orchestrator Service]
+    end
+
+
+    subgraph "Business Logic Layer"
+        RS[Recommendation Service]
+        FS[Follower Service]
+
+        IMC[("In-memory Cache")]
+    end
+
+  
+    subgraph "Adapter Layer"
+        MA[Book Metadata Service]
+
+        R[(Redis Cache)]
+
+        GBA([Google Books API])
+        NYT([New York Times API])
+    end
+  
+
+    subgraph "Data Layer"
+        UDS[User Data Service]
+        IDS[Item Data Service]
+
+        UDB[(User DB - SQLite)]
+        IDB[(Item DB - SQLite)]
+    end
+
+    IDS --> IDB
+    UDS --> UDB
+
+    UI -->|REST + JWT| OS
+
+    OS -->|REST| UDS
+    OS -->|REST| IDS
+    OS -->|REST| MA
+    OS -->|REST| RS
+    OS -->|REST| FS
+
+    RS -->|REST| IDS
+    RS -->|REST| MA
+
+    FS -->|REST| IDS
+    FS -->|REST| MA
+    FS <--> IMC
+
+    MA -->|REST| GBA
+    MA -->|REST| NYT
+    MA <--> R
+
 ```
 
 ## 📚 Tech & Tools
 
 ### Core Backend & Orchestration
-- **Node.js**: Runtime per tutti i microservizi.
-- **Express**: Framework web per la creazione di API REST.
-- **Axios**: Utilizzato per la comunicazione inter-servizio e chiamate API esterne.
-- **Concurrently**: Per avviare tutti i servizi con un singolo comando dalla root.
-- **Docker** - Containerization
+- **Node.js**: Runtime environment for all microservices.
+- **Express**: Web framework for building RESTful APIs.
+- **Docker**: Containerization and deployment orchestration.
 
 ### Data Layer
-- **SQLite3**: Database SQL leggero e file-based per utenti e librerie.
-- **GraphQL (`graphql-http`)**: Disponibile in `item-data` per query flessibili sulla libreria.
-- **Bcrypt.js**: Per l'hashing sicuro delle password.
-- **JWT** - Authentication
-- **Redis** - Caching and message queue
+- **SQLite3**: Lightweight, file-based SQL database for user and library data.
+- **GraphQL (`graphql-http`)**: Implemented in `item-data` for flexible library querying.
+- **JWT**: JSON Web Tokens for secure authentication.
+- **Redis**: High-performance caching and message queuing.
 
 ### Frontend
-- **Vanilla JavaScript (ES6+)**: Gestione dello stato e interazione senza framework pesanti.
-- **Tailwind CSS**: Framework utility-first per un design moderno e responsive.
-- **Font Awesome**: Per l'iconografia.
+- **Vanilla JavaScript**: State management and DOM interaction without heavy framework dependencies.
+- **Tailwind CSS**: Utility-first CSS framework for modern and responsive design.
+- **Font Awesome**: Iconography and vector assets.
 
 ### External APIs
-- **Google Books API**: Fonte principale per i metadati dei libri e la ricerca.
-- **New York Times API**: Fonte secondaria per i metadati dei libri e la ricerca.
+- **Google Books API**: Primary source for book metadata and search functionality.
+- **New York Times API**: Secondary source for book metadata and search functionality.
