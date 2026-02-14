@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const { isNewRelease } = require('./utils');
 
 const app = express();
 const PORT = process.env.PORT || 3005;
@@ -16,7 +17,8 @@ const axios = require('axios');
 
 // In-memory cache
 const cache = new Map();
-const CACHE_TTL = (process.env.CACHE_TTL_MINUTES || 60) * 60 * 1000;
+//const CACHE_TTL = (process.env.CACHE_TTL_MINUTES || 60) * 60 * 1000; TODO use this after DEV
+const CACHE_TTL = 1000;
 
 // Health Check
 app.get('/health', (req, res) => {
@@ -29,9 +31,9 @@ app.get('/new-releases/:user_id', async (req, res) => {
 
     // Check cache
     const cachedData = cache.get(user_id);
-    if (cachedData && (Date.now() - cachedData.timestamp < CACHE_TTL)) {
+    if (cachedData && cachedData.newReleases && (Date.now() - cachedData.timestamp < CACHE_TTL)) {
         console.log(`[FOLLOWER] Serving cached releases for user ${user_id}`);
-        return res.json(cachedData.data);
+        return res.json(cachedData.newReleases);
     }
 
     try {
@@ -42,29 +44,96 @@ app.get('/new-releases/:user_id', async (req, res) => {
         if (books.length === 0) return res.json([]);
 
         // Extract unique authors
-        const authors = [...new Set(books.map(b => b.author).filter(a => a))];
+        const authors = books.map(b => b.author).filter(a => a);
+        const uniqueAuthors = [...new Set(authors)];
 
         // Fetch recent books for each author
-        const releasePromises = authors.slice(0, 5).map(author =>
-            axios.get(`${process.env.BOOK_METADATA_URL}/search?q=inauthor:"${author}"&orderBy=newest`)
+        const releasePromises = uniqueAuthors.slice(0, 5).map(author =>
+            axios.get(`${process.env.BOOK_METADATA_URL}/search/advanced`, {
+                params: { q: `inauthor:"${author}"`, maxResults: 5, orderBy: 'newest' }
+            })
         );
 
         const responses = await Promise.all(releasePromises);
         let allReleases = responses.flatMap(r => r.data);
 
-        // Filter and sort
-        const existingTitles = new Set(books.map(b => b.title.toLowerCase()));
-        const newReleases = allReleases
-            .filter(b => !existingTitles.has(b.title.toLowerCase()))
-            .slice(0, 15);
+        // Filter out books already in library and not new releases
+        const existingIsbns = new Set(books.map(b => b.isbn).filter(i => i));
+        const newReleases = allReleases.filter(b => !existingIsbns.has(b.isbn) && isNewRelease(b.publishedDate));
 
         // Update cache
         cache.set(user_id, {
             timestamp: Date.now(),
-            data: newReleases
+            newReleases: newReleases
         });
 
         res.json(newReleases);
+    } catch (error) {
+        console.error('[FOLLOWER] Failed to fetch new releases:', error.message);
+        res.status(500).json({ error: 'Failed to fetch new releases' });
+    }
+});
+
+// Get New Releases for authors in user's library
+app.get('/last-releases/:user_id', async (req, res) => {
+    const { user_id } = req.params;
+
+    // Check cache
+    const cachedData = cache.get(user_id);
+    if (cachedData && cachedData.lastReleases && (Date.now() - cachedData.timestamp < CACHE_TTL)) {
+        console.log(`[FOLLOWER] Serving cached releases for user ${user_id}`);
+        return res.json(cachedData.lastReleases);
+    }
+
+    try {
+        // Get user's books from Item Data service
+        const libraryRes = await axios.get(`${process.env.ITEM_DATA_URL}/books/${user_id}`);
+        const books = libraryRes.data;
+
+        if (books.length === 0) return res.json([]);
+
+        const authors = books.map(b => b.author).filter(a => a);
+        const existingIsbns = new Set(books.map(b => b.isbn).filter(i => i));
+
+        // Rank authors by frequency
+        const authorCounts = {};
+        for (const a of authors) {
+            authorCounts[a] = (authorCounts[a] || 0) + 1;
+        }
+
+        const sortedAuthors = Object.entries(authorCounts)
+            .sort((a, b) => b[1] - a[1])
+            .map(entry => entry[0]);
+
+        // Fetch recent books for each author
+        const releaseResults = await Promise.all(sortedAuthors.slice(0, 5).map(async author => {
+            try {
+                const response = await axios.get(`${process.env.BOOK_METADATA_URL}/search/advanced`, {
+                    params: { q: `inauthor:"${author}"`, maxResults: 5, orderBy: 'newest' }
+                });
+                // Filter out books already in library
+                const filteredBooks = response.data.filter(b => !existingIsbns.has(b.isbn));
+                return { author, books: filteredBooks };
+            } catch (err) {
+                console.error(`[FOLLOWER] Failed to fetch for ${author}:`, err.message);
+                return { author, books: [] };
+            }
+        }));
+
+        const lastReleases = {};
+        releaseResults.forEach(res => {
+            if (res.books.length > 0) {
+                lastReleases[res.author] = res.books;
+            }
+        });
+
+        // Update cache
+        cache.set(user_id, {
+            timestamp: Date.now(),
+            lastReleases: lastReleases
+        });
+
+        res.json(lastReleases);
     } catch (error) {
         console.error('[FOLLOWER] Failed to fetch new releases:', error.message);
         res.status(500).json({ error: 'Failed to fetch new releases' });

@@ -254,14 +254,46 @@ async function initNewReleases() {
     const grid = document.getElementById('newReleasesGrid');
     if (!grid) return;
 
+    const no_results_message = '<p class="col-span-full text-center text-gray-500 py-10">No releases found for your favorite authors.</p>';
+
     //Fetch and show new releases books
     try {
         const res = await fetch(`/api/new-releases/${State.user.id}`);
         const books = await res.json();
         grid.innerHTML = books.map(book => createBookCard(book)).join('');
-        if (books.length === 0) grid.innerHTML = '<p class="col-span-full text-center text-gray-500 py-10">No new releases found for your favorite authors.</p>';
+        if (books.length === 0) grid.innerHTML = no_results_message;
     } catch (err) {
-        grid.innerHTML = '<p class="text-red-400">Failed to load new releases.</p>'; //TODO notify user error, scritta No new releases found for your favorite authors.
+        showToast('Failed to fetch new releases. Unexpected error: ' + err.message, 'error');
+        grid.innerHTML = no_results_message;
+    }
+
+    //Fetch and show last releases books
+    const lastReleasesContainer = document.getElementById('lastReleasesContainer');
+    if (!lastReleasesContainer) return;
+
+    try {
+        const res = await fetch(`/api/last-releases/${State.user.id}`);
+        const lastReleasesMap = await res.json();
+
+        const authors = Object.keys(lastReleasesMap);
+        if (authors.length === 0) {
+            lastReleasesContainer.innerHTML = no_results_message;
+            return;
+        }
+
+        lastReleasesContainer.innerHTML = authors.map(author => `
+            <div class="author-section">
+                <h3 class="text-xl font-semibold mb-6 flex items-center">
+                   <i class="fas fa-user text-indigo-400 mr-2"></i> ${author}'s Last Releases
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                    ${lastReleasesMap[author].map(book => createBookCard(book)).join('')}
+                </div>
+            </div>
+        `).join('');
+    } catch (err) {
+        showToast('Failed to fetch last releases. Unexpected error: ' + err.message, 'error');
+        lastReleasesContainer.innerHTML = no_results_message;
     }
 }
 

@@ -127,6 +127,16 @@ app.get('/api/new-releases/:user_id', async (req, res) => { //TODO: Block reques
   }
 });
 
+app.get('/api/last-releases/:user_id', async (req, res) => { //TODO: Block request for a user_id that is not the one logged in
+  try {
+    const response = await axios.get(`${process.env.FOLLOWER_URL}/last-releases/${req.params.user_id}`);
+    res.json(response.data);
+  } catch (e) {
+    res.status(e.response?.status || 500).json(e.response?.data || { message: 'Failed to fetch last releases', error: e.message });
+  }
+});
+
+
 app.get('/api/proxy-image', async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'URL is required' });
@@ -173,7 +183,7 @@ app.get('/api/proxy-image', async (req, res) => {
 
 // Redirect any other route to the dashboard
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../../../client/index.html')); //TODO: use clientPath
+  res.sendFile(path.join(clientPath, 'index.html'));
 });
 
 app.listen(PORT, () => {

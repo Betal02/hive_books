@@ -61,6 +61,8 @@ async function fetchWithRetry(url, retries = 3) { //TODO move in utils.js?
  * Google Books API
  */
 
+const fieldsStr = 'items(id,volumeInfo/title,volumeInfo/authors,volumeInfo/publishedDate,volumeInfo/description,volumeInfo/industryIdentifiers,volumeInfo/imageLinks,volumeInfo/categories)';
+
 // Search books by query
 app.get('/search', async (req, res) => {
     const { q } = req.query;
@@ -70,6 +72,9 @@ app.get('/search', async (req, res) => {
         const response = await axios.get(process.env.GOOGLE_BOOKS_API_URL, {
             params: {
                 q: q,
+                fields: fieldsStr,
+                orderBy: 'relevance',
+                langRestrict: 'en',
                 key: process.env.GOOGLE_BOOKS_API_KEY || undefined,
             }
         });
@@ -92,10 +97,11 @@ app.get('/search/advanced', async (req, res) => {
         const response = await axios.get(process.env.GOOGLE_BOOKS_API_URL, {
             params: {
                 q,
-                key: process.env.GOOGLE_BOOKS_API_KEY || undefined,
+                fields: fieldsStr,
                 maxResults: maxResults || 15,
                 orderBy: orderBy || 'relevance',
-                langRestrict: langRestrict || 'en'
+                langRestrict: langRestrict || 'en',
+                key: process.env.GOOGLE_BOOKS_API_KEY || undefined,
             }
         });
 
@@ -116,8 +122,10 @@ app.get('/isbn/:isbn', async (req, res) => {
         const response = await axios.get(process.env.GOOGLE_BOOKS_API_URL, {
             params: {
                 q: `isbn:${isbn}`,
+                fields: fieldsStr,
+                maxResults: 1,
+                orderBy: 'relevance',
                 key: process.env.GOOGLE_BOOKS_API_KEY || undefined,
-                maxResults: 1
             }
         });
 
