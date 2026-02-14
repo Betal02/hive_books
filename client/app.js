@@ -269,11 +269,14 @@ async function loadDiscovery(elementId) {
     const grid = document.getElementById(elementId);
     if (!grid) return;
 
-    //Fetch and show first 10 recommended books
+    //Fetch and show recommended books
     try {
         const res = await fetch(`/api/discovery/${State.user ? State.user.id : 0}`);
-        const books = await res.json();
-        grid.innerHTML = books.slice(0, 10).map(book => createBookCard(book)).join('');
+        let books = await res.json();//TODO check if books is empty and notify if it is
+        if (elementId === "popularGrid") {
+            books = books.slice(0, 10);
+        }
+        grid.innerHTML = books.map(book => createBookCard(book)).join('');
     } catch (err) {
         showToast('Failed to load discovery. Unexpected error: ' + err.message, 'error');
     }

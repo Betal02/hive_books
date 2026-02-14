@@ -8,6 +8,7 @@ const axios = require('axios');
 const { createClient } = require('redis');
 const Bottleneck = require('bottleneck');
 const { normalizeGoogleBook, normalizeNYTBook } = require('./utils');
+const { getGenre, getGenreFromLabel } = require('./genres');
 
 const app = express();
 const PORT = process.env.PORT || 3003;
@@ -82,6 +83,31 @@ app.get('/search', async (req, res) => {
     }
 });
 
+// Search books by query with advanced options
+app.get('/search/advanced', async (req, res) => {
+    const { q, maxResults, orderBy, langRestrict } = req.query;
+    if (!q) return res.status(400).json({ error: 'Query parameter q is required' });
+
+    try {
+        const response = await axios.get(process.env.GOOGLE_BOOKS_API_URL, {
+            params: {
+                q,
+                key: process.env.GOOGLE_BOOKS_API_KEY || undefined,
+                maxResults: maxResults || 15,
+                orderBy: orderBy || 'relevance',
+                langRestrict: langRestrict || 'en'
+            }
+        });
+
+        const items = response.data.items || [];
+        const normalized = items.map(normalizeGoogleBook);
+        res.json(normalized);
+    } catch (error) {
+        console.error('[METADATA] Failed to fetch data from Google Books API:', error.message);
+        res.status(500).json({ message: 'Failed to fetch data from Google Books API', error: error.message });
+    }
+});
+
 // Search book by ISBN
 app.get('/isbn/:isbn', async (req, res) => {
     const { isbn } = req.params;
@@ -108,34 +134,17 @@ app.get('/isbn/:isbn', async (req, res) => {
 /**
  * NYT API
  */
+
 app.get('/nyt/:category', async (req, res) => {
-    const listNames = {
-        fiction: 'hardcover-fiction',
-        nonfiction: 'hardcover-nonfiction',
-        business: 'business-books',
-        manga: 'graphic-books-and-manga',
-        ya: 'young-adult-hardcover',
-        combined: 'combined-print-and-e-book-fiction'
-    };
+    const genre = getGenre(req.params.category);
 
-    const categoryNames = {
-        'hardcover-fiction': 'Fiction',
-        'hardcover-nonfiction': 'Non Fiction',
-        'business-books': 'Business',
-        'graphic-books-and-manga': 'Manga',
-        'young-adult-hardcover': 'Young Adult',
-        'combined-print-and-e-book-fiction': 'Combined'
-    };
-
-    const listName = listNames[req.params.category];
-
-    if (!listName) {
-        return res.status(400).json({ message: 'Invalid NYT category' });
+    if (!genre || !genre.nyt) {
+        return res.status(400).json({ message: 'Invalid or unsupported NYT category' });
     }
 
     try {
         const response = await axios.get(
-            `${process.env.NYT_API_URL}${listName}.json`,
+            `${process.env.NYT_API_URL}${genre.nyt}.json`,
             {
                 params: {
                     'api-key': process.env.NYT_API_KEY
@@ -144,7 +153,7 @@ app.get('/nyt/:category', async (req, res) => {
         );
 
         const items = response.data.results.books || [];
-        const normalized = items.map(item => normalizeNYTBook(item, categoryNames[listName]));
+        const normalized = items.map(item => normalizeNYTBook(item, genre.label));
         res.json(normalized);
     } catch (error) {
         console.error('[METADATA] Failed to fetch data from NYT API:', error.message);
@@ -152,6 +161,15 @@ app.get('/nyt/:category', async (req, res) => {
     }
 });
 
+/**
+ * Genre Metadata API
+ */
+
+app.get('/genres/:label', (req, res) => {
+    const genreKey = getGenreFromLabel(req.params.label);
+    if (!genreKey) return res.status(404).json({ error: 'Genre not found' });
+    res.json({ key: genreKey, ...getGenre(genreKey) });
+});
 
 /**
  * Image Proxy (with Redis)
