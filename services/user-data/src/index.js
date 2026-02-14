@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const db = require('./db');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -37,7 +38,12 @@ app.post('/register', (req, res) => {
             }
             return res.status(500).json({ error: 'Internal server error' });
         }
-        res.status(201).json({ id: this.lastID, email, name });
+        const token = jwt.sign(
+            { id: this.lastID, email, name },
+            process.env.ACCESS_JWT_SECRET,
+            { expiresIn: '8h' }
+        );
+        res.status(201).json({ id: this.lastID, email, name, token });
     });
 });
 
@@ -59,7 +65,12 @@ app.post('/login', (req, res) => {
 
         // Returning user without password
         const { password: _, ...userSafe } = user;
-        res.json(userSafe);
+        const token = jwt.sign(
+            { id: user.id, email: user.email, name: user.name },
+            process.env.ACCESS_JWT_SECRET,
+            { expiresIn: '8h' }
+        );
+        res.json({ ...userSafe, token });
     });
 });
 

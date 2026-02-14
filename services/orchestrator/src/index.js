@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,6 +31,20 @@ app.get('/health', (req, res) => {
   res.json({ status: 'UP', service: 'Orchestrator' });
 });
 
+// Authentication Middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) return res.status(401).json({ message: 'Authentication token required' });
+
+  jwt.verify(token, process.env.ACCESS_JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ message: 'Invalid or expired token' });
+    req.user = user;
+    next();
+  });
+};
+
 // --- AUTH WORKFLOWS ---
 
 app.post('/api/auth/login', async (req, res) => {
@@ -52,18 +67,20 @@ app.post('/api/auth/register', async (req, res) => {
 
 // --- LIBRARY WORKFLOWS ---
 
-app.get('/api/library/:user_id', async (req, res) => { //TODO: Block request for a user_id that is not the one logged in
+app.get('/api/library', authenticateToken, async (req, res) => {
   try {
-    const response = await axios.get(`${process.env.ITEM_DATA_URL}/books/${req.params.user_id}`);
+    const response = await axios.get(`${process.env.ITEM_DATA_URL}/books/${req.user.id}`);
     res.json(response.data);
   } catch (e) {
     res.status(e.response?.status || 500).json(e.response?.data || { message: 'Failed to fetch library', error: e.message });
   }
 });
 
-app.post('/api/books/add', async (req, res) => {
-  const { user_id, isbn, title } = req.body;
-  if (!user_id || (!isbn && !title)) return res.status(400).json({ message: 'Failed to add book', error: 'User ID and either ISBN or Title required' }); //TODO be more generic for title -> is a manually added book, rename it as book or content
+app.post('/api/books/add', authenticateToken, async (req, res) => {
+  const { isbn, title } = req.body;
+  const user_id = req.user.id;
+
+  if (!isbn && !title) return res.status(400).json({ message: 'Failed to add book', error: 'ISBN or Title required' });
 
   try {
     let bookMetadata;
@@ -89,7 +106,7 @@ app.post('/api/books/add', async (req, res) => {
   }
 });
 
-app.delete('/api/books/:id', async (req, res) => {
+app.delete('/api/books/:id', authenticateToken, async (req, res) => {
   try {
     await axios.delete(`${process.env.ITEM_DATA_URL}/books/${req.params.id}`);
     res.json({ message: 'Book removed' });
@@ -109,27 +126,27 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-app.get('/api/discovery/:user_id', async (req, res) => { //TODO: Block request for a user_id that is not the one logged in
+app.get('/api/discovery', authenticateToken, async (req, res) => {
   try {
-    const response = await axios.get(`${process.env.RECOMMENDATION_URL}/recommendations/${req.params.user_id}`);
+    const response = await axios.get(`${process.env.RECOMMENDATION_URL}/recommendations/${req.user.id}`);
     res.json(response.data);
   } catch (e) {
     res.status(e.response?.status || 500).json(e.response?.data || { message: 'Failed to fetch recommendations', error: e.message });
   }
 });
 
-app.get('/api/new-releases/:user_id', async (req, res) => { //TODO: Block request for a user_id that is not the one logged in
+app.get('/api/new-releases', authenticateToken, async (req, res) => {
   try {
-    const response = await axios.get(`${process.env.FOLLOWER_URL}/new-releases/${req.params.user_id}`);
+    const response = await axios.get(`${process.env.FOLLOWER_URL}/new-releases/${req.user.id}`);
     res.json(response.data);
   } catch (e) {
     res.status(e.response?.status || 500).json(e.response?.data || { message: 'Failed to fetch new releases', error: e.message });
   }
 });
 
-app.get('/api/last-releases/:user_id', async (req, res) => { //TODO: Block request for a user_id that is not the one logged in
+app.get('/api/last-releases', authenticateToken, async (req, res) => {
   try {
-    const response = await axios.get(`${process.env.FOLLOWER_URL}/last-releases/${req.params.user_id}`);
+    const response = await axios.get(`${process.env.FOLLOWER_URL}/last-releases/${req.user.id}`);
     res.json(response.data);
   } catch (e) {
     res.status(e.response?.status || 500).json(e.response?.data || { message: 'Failed to fetch last releases', error: e.message });

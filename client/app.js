@@ -141,7 +141,9 @@ async function initDashboard() {
 
     // Fetch Library
     try {
-        const res = await fetch(`/api/library/${State.user.id}`);
+        const res = await fetch(`/api/library`, {
+            headers: { 'Authorization': `Bearer ${State.user.token}` }
+        });
         const books = await res.json();
         State.library = books;
         renderLibrary();
@@ -258,7 +260,9 @@ async function initNewReleases() {
 
     //Fetch and show new releases books
     try {
-        const res = await fetch(`/api/new-releases/${State.user.id}`);
+        const res = await fetch(`/api/new-releases`, {
+            headers: { 'Authorization': `Bearer ${State.user.token}` }
+        });
         const books = await res.json();
         grid.innerHTML = books.map(book => createBookCard(book)).join('');
         if (books.length === 0) grid.innerHTML = no_results_message;
@@ -272,7 +276,9 @@ async function initNewReleases() {
     if (!lastReleasesContainer) return;
 
     try {
-        const res = await fetch(`/api/last-releases/${State.user.id}`);
+        const res = await fetch(`/api/last-releases`, {
+            headers: { 'Authorization': `Bearer ${State.user.token}` }
+        });
         const lastReleasesMap = await res.json();
 
         const authors = Object.keys(lastReleasesMap);
@@ -303,12 +309,14 @@ async function loadDiscovery(elementId) {
 
     //Fetch and show recommended books
     try {
-        const res = await fetch(`/api/discovery/${State.user ? State.user.id : 0}`);
-        let books = await res.json();//TODO check if books is empty and notify if it is
+        const headers = State.user ? { 'Authorization': `Bearer ${State.user.token}` } : {};
+        const res = await fetch(`/api/discovery`, { headers });
+        let books = await res.json();
         if (elementId === "popularGrid") {
             books = books.slice(0, 10);
         }
         grid.innerHTML = books.map(book => createBookCard(book)).join('');
+        if (books.length === 0) grid.innerHTML = '<p class="col-span-full text-center text-gray-500 py-10">No books found for discovery.</p>';
     } catch (err) {
         showToast('Failed to load discovery. Unexpected error: ' + err.message, 'error');
     }
@@ -321,11 +329,11 @@ async function addBook(book) {
     try {
         const res = await fetch(`/api/books/add`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_id: State.user.id,
-                ...book
-            })
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${State.user.token}`
+            },
+            body: JSON.stringify(book)
         });
 
         if (!res.ok) throw new Error('Failed to add book');
@@ -339,7 +347,10 @@ async function removeBook(bookId) {
     if (!confirm('Are you sure you want to remove this book?')) return; //TODO use a custom pupup instead of confirm ?
 
     try {
-        await fetch(`/api/books/${bookId}`, { method: 'DELETE' });
+        await fetch(`/api/books/${bookId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${State.user.token}` }
+        });
         State.library = State.library.filter(b => b.id !== bookId);
         renderLibrary();
         showToast('Book removed from library!');
