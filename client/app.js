@@ -198,7 +198,14 @@ function renderLibrary() {
     }
 
     emptyMessage.classList.add('hidden');
-    gridView.classList.remove('hidden');
+
+    if (State.viewMode === 'grid') {
+        gridView.classList.remove('hidden');
+        tableView.classList.add('hidden');
+    } else {
+        gridView.classList.add('hidden');
+        tableView.classList.remove('hidden');
+    }
 
     // Render Grid
     gridView.innerHTML = State.library.map(book => createBookCard(book, true)).join('');
@@ -585,9 +592,14 @@ async function removeBook(bookId) {
             headers: { 'Authorization': `Bearer ${State.user.token}` }
         });
         if (!res.ok) throw new Error('Delete failed');
-        State.library = State.library.filter(b => b.id === bookId ? false : true);
-        renderLibrary();
+        State.library = State.library.filter(b => String(b.id) !== String(bookId));
+
         showToast('Book removed from library!');
+
+        // Refresh dashboard if we are there
+        if (document.getElementById('libraryContainer')) {
+            renderLibrary();
+        }
         return true;
     } catch (err) {
         showToast('Failed to remove book. Unexpected error: ' + err.message, 'error');

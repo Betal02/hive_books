@@ -1,4 +1,4 @@
-function isNewRelease(dateString, months = 6) {
+function isNewRelease(dateString, months = 12) {
     if (!dateString) return false;
 
     const now = new Date();

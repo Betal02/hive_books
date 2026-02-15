@@ -104,11 +104,14 @@ flowchart TD
 
     FS -->|REST| IDS
     FS -->|REST| MA
-    FS <--> IMC
 
-    MA -->|REST| GBA
-    MA -->|REST| NYT
-    MA <--> R
+    FS <--> IMC
+    RS <--> IMC
+
+    MA -->|REST| GBA
+    MA -->|REST| NYT
+
+    MA <--> R
 
 ```
 
@@ -121,7 +124,6 @@ flowchart TD
 
 ### Data Layer
 - **SQLite3**: Lightweight, file-based SQL database for user and library data.
-- **GraphQL (`graphql-http`)**: Implemented in `item-data` for flexible library querying.
 - **JWT**: JSON Web Tokens for secure authentication.
 - **Redis**: High-performance caching and message queuing.
 
