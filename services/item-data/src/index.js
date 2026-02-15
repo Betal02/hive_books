@@ -85,20 +85,40 @@ app.post('/books', (req, res) => {
   ];
 
   db.run(sql, params, function (err) {
-    if (err) return res.status(500).json({ error: 'Internal server error' }); //TODO: give more info type err
+    if (err) return res.status(500).json({ error: 'Internal server error' });
 
     db.get('SELECT * FROM books WHERE id = ?', [this.lastID], (err, row) => {
-      if (err) return res.status(500).json({ error: 'Internal server error' }); //TODO: give more info type err
+      if (err) return res.status(500).json({ error: 'Internal server error' });
       res.status(201).json(row);
     });
   });
 });
 
-//TODO: edit/update book
+app.put('/books/:id', (req, res) => {
+  const { title, author, isbn, thumbnail, genre, year, description } = req.body;
+  if (!title) return res.status(400).json({ error: 'Title is required' });
+
+  const sql = `
+    UPDATE books 
+    SET title = ?, author = ?, isbn = ?, thumbnail = ?, genre = ?, year = ?, description = ? 
+    WHERE id = ?
+  `;
+  const params = [title, author || null, isbn || null, thumbnail || null, genre || null, year || null, description || null, req.params.id];
+
+  db.run(sql, params, function (err) {
+    if (err) return res.status(500).json({ error: 'Internal server error', details: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Book not found' });
+
+    db.get('SELECT * FROM books WHERE id = ?', [req.params.id], (err, row) => {
+      if (err) return res.status(500).json({ error: 'Internal server error' });
+      res.json(row);
+    });
+  });
+});
 
 app.delete('/books/:id', (req, res) => {
   db.run('DELETE FROM books WHERE id = ?', [req.params.id], function (err) {
-    if (err) return res.status(500).json({ error: 'Internal server error' }); //TODO: give more info type err
+    if (err) return res.status(500).json({ error: 'Internal server error' });
     if (this.changes === 0) return res.status(404).json({ error: 'Book not found' });
     res.json({ message: 'Book deleted' });
   });

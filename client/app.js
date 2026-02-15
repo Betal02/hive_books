@@ -3,8 +3,8 @@
  */
 const State = {
     user: JSON.parse(localStorage.getItem('hive_user')),
-    view: 'grid',
-    library: []
+    library: [],
+    viewMode: 'table',
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -22,6 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initSearch();
     initDiscovery();
     initNewReleases();
+    initAddBookModal();
+    initEditModal();
 });
 
 /**
@@ -122,18 +124,39 @@ async function initDashboard() {
     const libraryContainer = document.getElementById('libraryContainer');
     if (!libraryContainer) return;
 
+    initAddBookModal();
+
     // View Toggle
     const viewTableBtn = document.getElementById('viewTable');
     const viewGridBtn = document.getElementById('viewGrid');
     const gridView = document.getElementById('gridView');
     const tableView = document.getElementById('tableView');
 
+    // Set initial view state
+    if (State.viewMode === 'grid') {
+        viewGridBtn.classList.add('view-btn-active');
+        viewTableBtn.classList.remove('view-btn-active');
+        gridView.classList.remove('hidden');
+        tableView.classList.add('hidden');
+    } else {
+        viewTableBtn.classList.add('view-btn-active');
+        viewGridBtn.classList.remove('view-btn-active');
+        gridView.classList.add('hidden');
+        tableView.classList.remove('hidden');
+    }
+
     if (viewTableBtn && viewGridBtn) {
         viewTableBtn.addEventListener('click', () => {
+            State.viewMode = 'table';
+            viewTableBtn.classList.add('view-btn-active');
+            viewGridBtn.classList.remove('view-btn-active');
             gridView.classList.add('hidden');
             tableView.classList.remove('hidden');
         });
         viewGridBtn.addEventListener('click', () => {
+            State.viewMode = 'grid';
+            viewGridBtn.classList.add('view-btn-active');
+            viewTableBtn.classList.remove('view-btn-active');
             tableView.classList.add('hidden');
             gridView.classList.remove('hidden');
         });
@@ -144,8 +167,17 @@ async function initDashboard() {
         const res = await fetch(`/api/library`, {
             headers: { 'Authorization': `Bearer ${State.user.token}` }
         });
-        const books = await res.json();
-        State.library = books;
+        const data = await res.json();
+
+        if (res.status === 401 || res.status === 403) {
+            localStorage.removeItem('hive_user');
+            window.location.href = 'login.html';
+            return;
+        }
+
+        if (!res.ok) throw new Error(data.message || 'Failed to fetch library');
+
+        State.library = Array.isArray(data) ? data : [];
         renderLibrary();
     } catch (err) {
         showToast('Failed to fetch library. Unexpected error: ' + err.message, 'error');
@@ -171,18 +203,18 @@ function renderLibrary() {
     // Render Grid
     gridView.innerHTML = State.library.map(book => createBookCard(book, true)).join('');
 
-    // Render Table
+    // Render Table /* line-clamp-1 */
     tableBody.innerHTML = State.library.map(book => `
         <tr class="border-b border-gray-800 hover:bg-gray-800 transition">
             <td class="py-3 px-2">
                 ${renderThumbnail(book.thumbnail, 'w-12 h-16 rounded shadow')}
             </td>
-            <td class="py-3 px-2 font-semibold">${book.title}</td>
-            <td class="py-3 px-2 text-gray-400">${book.author}</td>
+            <td class="py-3 px-2 font-semibold ">${book.title}</td>
+            <td class="py-3 px-2 text-gray-400 ">${book.author}</td>
             <td class="py-3 px-2 text-gray-500 font-mono text-xs">${book.isbn || 'N/A'}</td>
             <td class="py-3 px-2">
-                <button onclick="removeBook(${book.id})" class="text-red-400 hover:text-red-300 transition">
-                    <i class="fas fa-trash"></i>
+                <button onclick='openEditModal(${book.id})' class="text-indigo-400 hover:text-indigo-300 transition">
+                    <i class="fas fa-edit"></i>
                 </button>
             </td>
         </tr>
@@ -195,7 +227,17 @@ function renderLibrary() {
 function initSearch() {
     const searchBtn = document.getElementById('searchBtn');
     const searchInput = document.getElementById('searchInput');
+    const toggleOptionsBtn = document.getElementById('toggleOptionsBtn');
+    const optionsPanel = document.getElementById('optionsPanel');
+
     if (!searchBtn) return;
+
+    if (toggleOptionsBtn && optionsPanel) {
+        toggleOptionsBtn.addEventListener('click', () => {
+            optionsPanel.classList.toggle('hidden');
+            toggleOptionsBtn.classList.toggle('text-indigo-400');
+        });
+    }
 
     // Search event listeners
     searchBtn.addEventListener('click', () => performSearch(searchInput.value));
@@ -206,7 +248,23 @@ function initSearch() {
 }
 
 async function performSearch(query) {
-    if (!query) return;
+    const isbn = document.getElementById('filterIsbn')?.value.trim();
+    const title = document.getElementById('filterTitle')?.value.trim();
+    const author = document.getElementById('filterAuthor')?.value.trim();
+    const sort = document.getElementById('filterSort')?.value || 'relevance';
+
+    let q = query;
+    if (isbn || title || author) {
+        const parts = [];
+        if (query) parts.push(query);
+        if (isbn) parts.push(`isbn:${isbn}`);
+        if (title) parts.push(`intitle:${title}`);
+        if (author) parts.push(`inauthor:${author}`);
+        q = parts.join(' ');
+    }
+
+    if (!q) return;
+
     const initialView = document.getElementById('initialView');
     const searchResultsView = document.getElementById('searchResultsView');
     const resultsList = document.getElementById('resultsList');
@@ -217,29 +275,37 @@ async function performSearch(query) {
     // Show loading spinner
     resultsList.innerHTML = '<div class="text-center py-10"><i class="fas fa-spinner fa-spin text-3xl"></i></div>';
 
-    const no_results_message = `<p class="text-gray-400">No results found for "${query}".</p>`;
+    const no_results_message = `<p class="text-gray-400">No results found for "${q}".</p>`;
 
     // Fetch and show search results
     try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-        const results = await res.json();
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&orderBy=${sort}`);
+        const data = await res.json();
 
-        resultsList.innerHTML = results.length === 0 ? no_results_message : results.map(book => `
+        if (!res.ok) throw new Error(data.message || 'Failed to perform search');
+
+        const resultsArray = Array.isArray(data) ? data : [];
+
+        resultsList.innerHTML = resultsArray.length === 0 ? no_results_message : resultsArray.map(book => `
             <div class="bg-gray-800 p-4 rounded-xl flex items-center border border-gray-700 hover:border-indigo-500 transition group">
                 ${renderThumbnail(book.thumbnail, 'w-16 h-24 rounded shadow-lg mr-6')}
                 <div class="flex-1 min-w-0">
-                    <h4 class="font-bold text-lg truncate">${book.title}</h4>
-                    <p class="text-gray-400">${book.author}</p>
-                    <p class="text-xs text-gray-500 mt-1">${book.genre || ''} • ${book.year || ''}</p>
+                    <h4 class="font-bold text-lg truncate">${book.title ? (book.title.length > 24 ? book.title.slice(0, 24) + '...' : book.title) : 'Unknown Title'}</h4>
+                    <p class="text-gray-400">${book.author || 'Unknown Author'}</p>
+                    <p class="text-xs text-gray-500 mt-1">${book.genre || 'General'} • ${book.year || 'Unknown Publication Year'}</p>
                 </div>
-                <button onclick='addBook(${JSON.stringify(book).replace(/'/g, "&apos;")})' 
-                    class="ml-4 bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg transition">
+                <button onclick='handleCardAdd(this, ${JSON.stringify(book).replace(/'/g, "&apos;")})' 
+                    class="action-add ml-4 bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg transition ${State.library.some(lb => lb.isbn === book.isbn) ? 'hidden' : ''}">
                     <i class="fas fa-plus"></i>
+                </button>
+                <button onclick='handleCardRemove(this, "${book.isbn}")' 
+                    class="action-remove ml-4 bg-red-600 hover:bg-red-700 p-3 rounded-lg transition ${State.library.some(lb => lb.isbn === book.isbn) ? '' : 'hidden'}">
+                    <i class="fas fa-trash"></i>
                 </button>
             </div>
         `).join('');
     } catch (err) {
-        showToast('Failed to fetch search results. Unexpected error: ' + err.message, 'error');
+        showToast('Failed to perform search. Unexpected error: ' + err.message, 'error');
         resultsList.innerHTML = no_results_message;
     }
 }
@@ -263,9 +329,15 @@ async function initNewReleases() {
         const res = await fetch(`/api/new-releases`, {
             headers: { 'Authorization': `Bearer ${State.user.token}` }
         });
-        const books = await res.json();
-        grid.innerHTML = books.map(book => createBookCard(book)).join('');
-        if (books.length === 0) grid.innerHTML = no_results_message;
+        const data = await res.json();
+
+        if (res.status === 401 || res.status === 403) return;
+
+        if (!res.ok) throw new Error(data.message || 'Failed to fetch new releases');
+
+        const booksArray = Array.isArray(data) ? data : [];
+        grid.innerHTML = booksArray.map(book => createBookCard(book)).join('');
+        if (booksArray.length === 0) grid.innerHTML = no_results_message;
     } catch (err) {
         showToast('Failed to fetch new releases. Unexpected error: ' + err.message, 'error');
         grid.innerHTML = no_results_message;
@@ -287,16 +359,19 @@ async function initNewReleases() {
             return;
         }
 
-        lastReleasesContainer.innerHTML = authors.map(author => `
-            <div class="author-section">
-                <h3 class="text-xl font-semibold mb-6 flex items-center">
-                   <i class="fas fa-user text-indigo-400 mr-2"></i> ${author}'s Last Releases
-                </h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                    ${lastReleasesMap[author].map(book => createBookCard(book)).join('')}
+        lastReleasesContainer.innerHTML = authors.map(author => {
+            const releases = Array.isArray(lastReleasesMap[author]) ? lastReleasesMap[author] : [];
+            return `
+                <div class="author-section">
+                    <h3 class="text-xl font-semibold mb-6 flex items-center">
+                       <i class="fas fa-user text-indigo-400 mr-2"></i> ${author}'s Last Releases
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                        ${releases.map(book => createBookCard(book)).join('')}
+                    </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     } catch (err) {
         showToast('Failed to fetch last releases. Unexpected error: ' + err.message, 'error');
         lastReleasesContainer.innerHTML = no_results_message;
@@ -311,15 +386,163 @@ async function loadDiscovery(elementId) {
     try {
         const headers = State.user ? { 'Authorization': `Bearer ${State.user.token}` } : {};
         const res = await fetch(`/api/discovery`, { headers });
-        let books = await res.json();
+        const data = await res.json();
+
+        if (res.status === 401 || res.status === 403) return;
+
+        if (!res.ok) throw new Error(data.message || 'Failed to load discovery');
+
+        let booksArray = Array.isArray(data) ? data : [];
         if (elementId === "popularGrid") {
-            books = books.slice(0, 10);
+            booksArray = booksArray.slice(0, 10);
         }
-        grid.innerHTML = books.map(book => createBookCard(book)).join('');
-        if (books.length === 0) grid.innerHTML = '<p class="col-span-full text-center text-gray-500 py-10">No books found for discovery.</p>';
+        grid.innerHTML = booksArray.map(book => createBookCard(book)).join('');
+        if (booksArray.length === 0) grid.innerHTML = '<p class="col-span-full text-center text-gray-500 py-10">No books found for discovery.</p>';
     } catch (err) {
         showToast('Failed to load discovery. Unexpected error: ' + err.message, 'error');
     }
+}
+
+/**
+ * Modal logic
+ */
+function initAddBookModal() {
+    const openBtn = document.getElementById('openAddModalBtn');
+    const modal = document.getElementById('addBookModal');
+    if (!openBtn || !modal) return;
+
+    // Prevent double init
+    if (openBtn.dataset.initialized) return;
+    openBtn.dataset.initialized = 'true';
+
+    const closeBtns = modal.querySelectorAll('.closeModal');
+    const addByIsbnBtn = document.getElementById('addByIsbnBtn');
+    const manualCreateBtn = document.getElementById('manualCreateBtn');
+
+    openBtn.addEventListener('click', () => modal.classList.remove('hidden'));
+
+    const hideModal = () => {
+        modal.classList.add('hidden');
+        document.getElementById('addIsbnInput').value = '';
+        document.getElementById('addTitleInput').value = '';
+    };
+
+    closeBtns.forEach(btn => btn.addEventListener('click', hideModal));
+    modal.addEventListener('click', (e) => e.target === modal && hideModal());
+
+    addByIsbnBtn.addEventListener('click', async () => {
+        const isbn = document.getElementById('addIsbnInput').value.trim();
+        if (!isbn) return showToast('Please enter an ISBN', 'warning');
+
+        addByIsbnBtn.disabled = true;
+        const originalText = addByIsbnBtn.textContent;
+        addByIsbnBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        if (await addBook({ isbn })) {
+            hideModal();
+        }
+
+        addByIsbnBtn.disabled = false;
+        addByIsbnBtn.textContent = originalText;
+    });
+
+    manualCreateBtn.addEventListener('click', async () => {
+        const title = document.getElementById('addTitleInput').value.trim();
+        if (!title) return showToast('Please enter a title', 'warning');
+
+        manualCreateBtn.disabled = true;
+        const originalText = manualCreateBtn.textContent;
+        manualCreateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        if (await addBook({ title })) {
+            hideModal();
+        }
+
+        manualCreateBtn.disabled = false;
+        manualCreateBtn.textContent = originalText;
+    });
+}
+
+function initEditModal() {
+    const modal = document.getElementById('editBookModal');
+    const form = document.getElementById('editBookForm');
+    const deleteBtn = document.getElementById('deleteFromEditBtn');
+
+    if (!modal || !form) return;
+
+    const closeBtns = modal.querySelectorAll('.closeModal');
+    const hideModal = () => modal.classList.add('hidden');
+
+    closeBtns.forEach(btn => btn.addEventListener('click', hideModal));
+    modal.addEventListener('click', (e) => e.target === modal && hideModal());
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('editBookId').value;
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+
+        const updatedData = {
+            title: document.getElementById('editTitle').value,
+            author: document.getElementById('editAuthor').value,
+            genre: document.getElementById('editGenre').value,
+            year: document.getElementById('editYear').value,
+            description: document.getElementById('editDescription').value,
+            isbn: document.getElementById('editIsbn').value,
+            thumbnail: document.getElementById('editThumbnail').value
+        };
+
+        try {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Saving...';
+
+            const res = await fetch(`/api/books/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${State.user.token}`
+                },
+                body: JSON.stringify(updatedData)
+            });
+
+            if (!res.ok) throw new Error('Failed to update book');
+
+            showToast('Book updated successfully!');
+            hideModal();
+
+            // Refresh
+            initDashboard(); //TODO remember view option togled
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        }
+    });
+
+    deleteBtn.addEventListener('click', async () => {
+        const id = document.getElementById('editBookId').value;
+        if (await removeBook(id)) {
+            hideModal();
+        }
+    });
+}
+
+function openEditModal(bookId) {
+    const book = State.library.find(b => b.id === bookId);
+    if (!book) return showToast('Book not found in local state', 'error');
+
+    document.getElementById('editBookId').value = book.id;
+    document.getElementById('editTitle').value = book.title || '';
+    document.getElementById('editAuthor').value = book.author || '';
+    document.getElementById('editGenre').value = book.genre || '';
+    document.getElementById('editYear').value = book.year || '';
+    document.getElementById('editDescription').value = book.description || '';
+    document.getElementById('editIsbn').value = book.isbn || '';
+    document.getElementById('editThumbnail').value = book.thumbnail || '';
+
+    const modal = document.getElementById('editBookModal');
+    if (modal) modal.classList.remove('hidden');
 }
 
 /**
@@ -337,25 +560,38 @@ async function addBook(book) {
         });
 
         if (!res.ok) throw new Error('Failed to add book');
+
+        const newBook = await res.json();
+        State.library.push(newBook);
         showToast('Book added to library!');
+
+        // Refresh dashboard if we are there
+        if (document.getElementById('libraryContainer')) {
+            renderLibrary();
+        }
+        return true;
     } catch (err) {
         showToast('Failed to add book. Unexpected error: ' + err.message, 'error');
+        return false;
     }
 }
 
 async function removeBook(bookId) {
-    if (!confirm('Are you sure you want to remove this book?')) return; //TODO use a custom pupup instead of confirm ?
+    if (!await showConfirm({ title: 'Remove Book', message: 'Are you sure you want to remove this book from your library?' })) return false;
 
     try {
-        await fetch(`/api/books/${bookId}`, {
+        const res = await fetch(`/api/books/${bookId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${State.user.token}` }
         });
-        State.library = State.library.filter(b => b.id !== bookId);
+        if (!res.ok) throw new Error('Delete failed');
+        State.library = State.library.filter(b => b.id === bookId ? false : true);
         renderLibrary();
         showToast('Book removed from library!');
+        return true;
     } catch (err) {
         showToast('Failed to remove book. Unexpected error: ' + err.message, 'error');
+        return false;
     }
 }
 
@@ -409,35 +645,91 @@ function renderThumbnail(thumbnail, classes = 'w-full h-full', color = 'text-ind
     `;
 }
 
-function createBookCard(book, showRemove = false) {
+function createBookCard(book, isLibraryCard = false) {
+    // Determine if book is already in library (for external recommendations)
+    const inLibrary = isLibraryCard || State.library.some(lb => lb.isbn === book.isbn && book.isbn);
+    const libBook = inLibrary ? State.library.find(lb => lb.isbn === book.isbn && book.isbn) : null;
+    const finalId = libBook ? libBook.id : book.id;
+
     return `
-        <div class="bg-gray-800 rounded-xl overflow-hidden border border-gray-700 hover:border-indigo-500 transition duration-300 group flex flex-col h-full">
+        <div class="bg-gray-800 rounded-xl overflow-hidden border border-gray-700 hover:border-indigo-500 transition duration-300 group flex flex-col h-full" id="card-${book.isbn || book.id}">
             <div class="aspect-[2/3] bg-gray-700 relative overflow-hidden">
                 ${renderThumbnail(book.thumbnail, 'w-full h-full')}
                 <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition duration-300 flex items-center justify-center">
-                    ${showRemove ?
-            `<button onclick="removeBook(${book.id})" class="bg-red-600 p-3 rounded-full opacity-0 group-hover:opacity-100 transition duration-300 shadow-xl">
-                            <i class="fas fa-trash"></i>
-                        </button>` :
-            `<button onclick='addBook(${JSON.stringify(book).replace(/'/g, "&apos;")})' class="bg-indigo-600 p-3 rounded-full opacity-0 group-hover:opacity-100 transition duration-300 shadow-xl">
-                            <i class="fas fa-plus"></i>
-                        </button>`
-        }
+                    <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition duration-300">
+                        ${isLibraryCard ? `
+                            <button onclick='openEditModal(${book.id})' class="bg-indigo-600 p-3 w-16 h-16 rounded-full shadow-xl hover:scale-110 transition">
+                                <i class="fas fa-edit text-2xl"></i>
+                            </button>
+                        ` : `
+                            <button onclick='handleCardAdd(this, ${JSON.stringify(book).replace(/'/g, "&apos;")})' 
+                                class="action-add bg-indigo-600 p-3 w-16 h-16 rounded-full shadow-xl hover:scale-110 transition ${inLibrary ? 'hidden' : ''}">
+                                <i class="fas fa-plus text-2xl"></i>
+                            </button>
+                            <button onclick='handleCardRemove(this, "${book.isbn}")' 
+                                class="action-remove bg-red-600 p-3 w-16 h-16 rounded-full shadow-xl hover:scale-110 transition ${inLibrary ? '' : 'hidden'}">
+                                <i class="fas fa-trash text-2xl"></i>
+                            </button>
+                        `}
+                    </div>
                 </div>
             </div>
             <div class="p-4 flex-1 flex flex-col justify-between">
                 <div>
-                    <h4 class="font-bold text-base line-clamp-2">${book.title}</h4>
-                    <p class="text-gray-400 text-xs truncate mt-1">${book.author}</p>
+                    <h4 class="font-bold text-base line-clamp-2">${book.title || 'Unknown Title'}</h4>
+                    <p class="text-gray-400 text-xs truncate mt-1">${book.author || 'Unknown Author'}</p>
                 </div>
                 <div class="flex justify-between items-center mt-3">
                     <span class="text-[10px] bg-gray-700 px-2 py-1 rounded text-gray-300">${book.genre || 'General'}</span>
-                    <span class="text-[10px] text-gray-500">${book.year || ''}</span>
+                    <span class="text-[10px] text-gray-500">${book.year || 'Unknown Publication Year'}</span>
                 </div>
             </div>
         </div>
     `;
 }
+
+/**
+ * Card Action Handlers
+ */
+async function handleCardAdd(btn, book) {
+    const card = btn.closest('[id^="card-"]');
+    const addBtn = card.querySelector('.action-add');
+    const removeBtn = card.querySelector('.action-remove');
+
+    try {
+        addBtn.disabled = true;
+        addBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        if (await addBook(book)) {
+            // Update UI
+            addBtn.classList.add('hidden');
+            removeBtn.classList.remove('hidden');
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        addBtn.disabled = false;
+        addBtn.innerHTML = '<i class="fas fa-plus"></i>';
+    }
+}
+
+async function handleCardRemove(btn, isbn) {
+    const libBook = State.library.find(b => b.isbn === isbn);
+    if (!libBook) return showToast('Book not found in library', 'error');
+
+    const card = btn.closest('[id^="card-"]');
+    const addBtn = card.querySelector('.action-add');
+    const removeBtn = card.querySelector('.action-remove');
+
+    if (await removeBook(libBook.id)) {
+        removeBtn.classList.add('hidden');
+        addBtn.classList.remove('hidden');
+    }
+}
+
+/**
+ * Toast and Modals
+ */
 
 function showToast(message, type = "success", duration = 4000) {
     const container = document.getElementById("toastContainer");
@@ -485,6 +777,45 @@ function showToast(message, type = "success", duration = 4000) {
     }, duration);
 }
 
+function showConfirm({
+    title = "Are you sure?",
+    message = "This action cannot be undone. Do you want to proceed?",
+}) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById("confirmModal");
+        const titleEl = document.getElementById("confirmTitle");
+        const messageEl = document.getElementById("confirmMessage");
+        const confirmBtn = document.getElementById("confirmAccept");
+        const cancelBtn = document.getElementById("confirmCancel");
+
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+
+        function close(result) {
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+
+            confirmBtn.removeEventListener("click", onConfirm);
+            cancelBtn.removeEventListener("click", onCancel);
+
+            resolve(result);
+        }
+
+        function onConfirm() { close(true); }
+        function onCancel() { close(false); }
+
+        confirmBtn.addEventListener("click", onConfirm);
+        cancelBtn.addEventListener("click", onCancel);
+    });
+}
+
+
 // Global onclick handlers
 window.addBook = addBook;
 window.removeBook = removeBook;
+window.openEditModal = openEditModal;
+window.handleCardAdd = handleCardAdd;
+window.handleCardRemove = handleCardRemove;

@@ -28,6 +28,24 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* Sidebar */
+aside {
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    overflow-y: auto;
+}
+
+/* View Toggle Styles */
+.view-btn-active {
+    /* gray-700 */
+    background-color: #374151 !important;
+    /* indigo-400 */
+    color: #818cf8 !important;
+    /* indigo-600 */
+    border: 1px solid #4f46e5 !important;
+}
+
 /* Animations */
 @keyframes fadeIn {
     from {

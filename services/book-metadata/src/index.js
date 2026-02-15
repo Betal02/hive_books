@@ -63,33 +63,8 @@ async function fetchWithRetry(url, retries = 3) { //TODO move in utils.js?
 
 const fieldsStr = 'items(id,volumeInfo/title,volumeInfo/authors,volumeInfo/publishedDate,volumeInfo/description,volumeInfo/industryIdentifiers,volumeInfo/imageLinks,volumeInfo/categories)';
 
-// Search books by query
-app.get('/search', async (req, res) => {
-    const { q } = req.query;
-    if (!q) return res.status(400).json({ error: 'Query parameter q is required' });
-
-    try {
-        const response = await axios.get(process.env.GOOGLE_BOOKS_API_URL, {
-            params: {
-                q: q,
-                fields: fieldsStr,
-                orderBy: 'relevance',
-                langRestrict: 'en',
-                key: process.env.GOOGLE_BOOKS_API_KEY || undefined,
-            }
-        });
-
-        const items = response.data.items || [];
-        const normalized = items.map(normalizeGoogleBook);
-        res.json(normalized);
-    } catch (error) {
-        console.error('[METADATA] Failed to fetch data from Google Books API:', error.message);
-        res.status(500).json({ message: 'Failed to fetch data from Google Books API', error: error.message });
-    }
-});
-
 // Search books by query with advanced options
-app.get('/search/advanced', async (req, res) => {
+app.get('/search', async (req, res) => {
     const { q, maxResults, orderBy, langRestrict } = req.query;
     if (!q) return res.status(400).json({ error: 'Query parameter q is required' });
 

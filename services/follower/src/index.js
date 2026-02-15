@@ -49,7 +49,7 @@ app.get('/new-releases/:user_id', async (req, res) => {
 
         // Fetch recent books for each author
         const releasePromises = uniqueAuthors.slice(0, 5).map(author =>
-            axios.get(`${process.env.BOOK_METADATA_URL}/search/advanced`, {
+            axios.get(`${process.env.BOOK_METADATA_URL}/search`, {
                 params: { q: `inauthor:"${author}"`, maxResults: 5, orderBy: 'newest' }
             })
         );
@@ -108,7 +108,7 @@ app.get('/last-releases/:user_id', async (req, res) => {
         // Fetch recent books for each author
         const releaseResults = await Promise.all(sortedAuthors.slice(0, 5).map(async author => {
             try {
-                const response = await axios.get(`${process.env.BOOK_METADATA_URL}/search/advanced`, {
+                const response = await axios.get(`${process.env.BOOK_METADATA_URL}/search`, {
                     params: { q: `inauthor:"${author}"`, maxResults: 5, orderBy: 'newest' }
                 });
                 // Filter out books already in library

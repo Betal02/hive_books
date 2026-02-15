@@ -115,6 +115,15 @@ app.delete('/api/books/:id', authenticateToken, async (req, res) => {
   }
 });
 
+app.put('/api/books/:id', authenticateToken, async (req, res) => {
+  try {
+    const response = await axios.put(`${process.env.ITEM_DATA_URL}/books/${req.params.id}`, req.body);
+    res.json(response.data);
+  } catch (e) {
+    res.status(e.response?.status || 500).json(e.response?.data || { message: 'Failed to update book', error: e.message });
+  }
+});
+
 // --- BOOK METADATA & SEARCH/RECOMMENDATION WORKFLOWS ---
 
 app.get('/api/search', async (req, res) => {

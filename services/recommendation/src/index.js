@@ -72,12 +72,12 @@ app.get('/recommendations/:user_id', async (req, res) => {
                 } else if (genreMap && genreMap.googleSubjects) {
                     // Fetch from Google with subjects query
                     const q = genreMap.googleSubjects.join(' ');
-                    queryRes = await axios.get(`${process.env.BOOK_METADATA_URL}/search/advanced`, {
+                    queryRes = await axios.get(`${process.env.BOOK_METADATA_URL}/search`, {
                         params: { q, maxResults }
                     });
                 } else {
                     // Fetch from Google with using not mapped genre
-                    queryRes = await axios.get(`${process.env.BOOK_METADATA_URL}/search/advanced`, {
+                    queryRes = await axios.get(`${process.env.BOOK_METADATA_URL}/search`, {
                         params: { q: `subject:${label}`, maxResults }
                     });
                 }
