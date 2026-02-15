@@ -105,8 +105,8 @@ flowchart TD
     FS -->|REST| IDS
     FS -->|REST| MA
 
-    FS <--> IMC
     RS <--> IMC
+    FS <--> IMC
 
     MA -->|REST| GBA
     MA -->|REST| NYT
