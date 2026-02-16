@@ -185,7 +185,7 @@ app.get('/api/proxy-image', async (req, res) => {
     const status = e.response?.status || 500;
 
     // If responseType was 'stream', e.response.data is a stream.
-    if (e.response?.data && typeof e.response.data.on === 'function') { //TODO refactor errors messages
+    if (e.response?.data && typeof e.response.data.on === 'function') {
       let errorBody = '';
       e.response.data.on('data', chunk => { errorBody += chunk.toString(); });
       e.response.data.on('end', () => {

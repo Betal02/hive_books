@@ -11,7 +11,7 @@ const app = express();
 const PORT = process.env.PORT || 3002;
 
 app.use(helmet({
-  contentSecurityPolicy: false, //TODO figure out how to remove in production
+  contentSecurityPolicy: false,
 }));
 app.use(cors());
 app.use(morgan('dev'));

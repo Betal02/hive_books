@@ -46,6 +46,19 @@ aside {
     border: 1px solid #4f46e5 !important;
 }
 
+/* Hide spin buttons in Chrome, Safari, and Edge */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Hide spin buttons in Firefox */
+input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
 /* Animations */
 @keyframes fadeIn {
     from {

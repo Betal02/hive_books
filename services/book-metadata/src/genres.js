@@ -157,8 +157,7 @@ const getNytGenreKeys = () => Object.keys(GENRE_MAPPING).filter(key => GENRE_MAP
 const findGenreLabel = (categories) => {
     if (!categories || !Array.isArray(categories)) return null;
 
-    const clean = (s) => s.toLowerCase().replace('subject:', '').trim(); //TODO: remove subject: from categories? Cost more add id manually when there is to do researchs or remove it now? I think now
-
+    const clean = (s) => s.toLowerCase().replace('subject:', '').trim();
     for (const cat of categories) {
         const cleanCat = clean(cat);
         for (const key in GENRE_MAPPING) {

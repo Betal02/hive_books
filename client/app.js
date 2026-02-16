@@ -81,6 +81,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (!path.endsWith('login.html') && !path.endsWith('register.html')) {
         await initDashboard();
+        initAddBookModal();
+        initEditModal();
 
         if (path.endsWith('discovery.html')) {
             initDiscovery();
@@ -213,9 +215,6 @@ async function initDashboard() {
     const libraryContainer = document.getElementById('libraryContainer');
     if (!libraryContainer) return;
 
-    initAddBookModal();
-    initEditModal();
-
     // View Toggle
     const viewTableBtn = document.getElementById('viewTable');
     const viewGridBtn = document.getElementById('viewGrid');
@@ -318,8 +317,8 @@ function isBookOwned(book) {
 
     if (normalizedTitle && normalizedAuthor) {
         return State.library.some(b => {
-            const libTitle = b.title?.toLowerCase().trim();
-            const libAuthor = b.author?.toLowerCase().trim();
+            const libTitle = b.title?.toLowerCase().trim() || '';
+            const libAuthor = b.author?.toLowerCase().trim() || '';
 
             // Check for exact match or substring match (e.g. "Title: Subtitle" vs "Title")
             const titleMatch = libTitle === normalizedTitle ||
@@ -649,6 +648,7 @@ async function renderLastReleases(force = false) {
 /**
  * Modal logic
  */
+
 function initAddBookModal() {
     const openBtn = document.getElementById('openAddModalBtn');
     const modal = document.getElementById('addBookModal');
@@ -769,6 +769,35 @@ function initEditModal() {
             hideModal();
         }
     });
+
+    // Open Library Covers API button
+    openLibraryBtn.addEventListener('click', async () => {
+        const isbn = document.getElementById('editIsbn').value.trim();
+
+        if (!isbn) {
+            showToast('You have to insert the ISBN before', 'warning');
+            return;
+        }
+
+        const url = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`;
+
+        try {
+            const response = await fetch(url, { method: 'HEAD' });
+
+            if (!response.ok) {
+                showToast('No cover found for this ISBN', 'error');
+                return;
+            }
+
+            const thumbnailInput = document.getElementById('editThumbnail');
+            thumbnailInput.value = url.replace('?default=false', '');
+            showToast('Thumbnail URL updated with Open Library!', 'success');
+
+        } catch (err) {
+            showToast('Error checking cover availability', 'error');
+        }
+    });
+
 }
 
 function openEditModal(bookId) {
@@ -808,7 +837,13 @@ async function addBook(book) {
             body: JSON.stringify(book)
         });
 
-        if (!res.ok) throw new Error('Failed to add book');
+        if (!res.ok) {
+            if (res.status === 404)
+                showToast('Book not found', 'warning');
+            else
+                throw new Error('Failed to add book');
+            return false;
+        }
 
         const newBook = await res.json();
         State.library.push(newBook);

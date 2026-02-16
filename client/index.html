@@ -136,7 +136,7 @@
                     <div class="space-y-2">
                         <label class="block text-xs font-semibold text-gray-500 uppercase">Add by ISBN</label>
                         <div class="flex gap-2">
-                            <input type="text" id="addIsbnInput" placeholder="9780..."
+                            <input type="number" id="addIsbnInput" placeholder="9780..." maxlength="13"
                                 class="flex-1 bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:ring-1 focus:ring-indigo-500 outline-none">
                             <button id="addByIsbnBtn"
                                 class="bg-indigo-600 hover:bg-indigo-700 px-4 rounded-lg transition text-sm font-bold">Add</button>
@@ -222,6 +222,12 @@
                     <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Thumbnail URL</label>
                     <input type="text" id="editThumbnail"
                         class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:ring-1 focus:ring-indigo-500 outline-none truncate">
+                    <p class="text-xs text-gray-500 mt-2">
+                        You don't want to search a thumbnail and you have an ISBN? Try the
+                        <button type="button" id="openLibraryBtn"
+                            class="text-indigo-400 hover:text-indigo-300 underline transition">Open Library Covers
+                            API</button>!
+                    </p>
                 </div>
 
                 <!-- Modal Footer / Buttons -->
