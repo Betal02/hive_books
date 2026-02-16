@@ -85,12 +85,12 @@ app.post('/api/books/add', authenticateToken, async (req, res) => {
   try {
     let bookMetadata;
 
-    // If ISBN provided: fetch metadata
-    if (isbn) {
+    // If ISBN provided (manual entry)
+    if (isbn && (!title || !req.body.author)) {
       const metaRes = await axios.get(`${process.env.BOOK_METADATA_URL}/isbn/${isbn}`);
       bookMetadata = metaRes.data;
     } else {
-      // If not: use the provided data
+      // Add book from card
       bookMetadata = req.body;
     }
 

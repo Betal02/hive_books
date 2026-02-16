@@ -5,30 +5,97 @@ const State = {
     user: JSON.parse(localStorage.getItem('hive_user')),
     library: [],
     viewMode: 'table',
+    config: {
+        refreshRateLimitPerMin: 3
+    }
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+/**
+ * Client-Side Cache
+ */
+
+const ClientCache = {
+    data: {},
+    refreshCounts: {},
+
+    set(key, value, ttlMs) {
+        this.data[key] = {
+            value,
+            expiry: Date.now() + ttlMs
+        };
+    },
+
+    get(key) {
+        const item = this.data[key];
+        if (!item) return null;
+        if (Date.now() > item.expiry) {
+            delete this.data[key];
+            return null;
+        }
+        return item.value;
+    },
+
+    clear(key) {
+        if (!key) {
+            this.data = {};
+            return;
+        }
+        delete this.data[key];
+    },
+
+    canRefresh(section) {
+        const now = Date.now();
+        const minuteAgo = now - 60000;
+
+        if (!this.refreshCounts[section]) {
+            this.refreshCounts[section] = [];
+        }
+
+        // Filter out timestamps older than a minute
+        this.refreshCounts[section] = this.refreshCounts[section].filter(ts => ts > minuteAgo);
+
+        if (this.refreshCounts[section].length >= State.config.refreshRateLimitPerMin) {
+            return false;
+        }
+
+        this.refreshCounts[section].push(now);
+        return true;
+    }
+};
+
+/**
+ * Router
+ */
+
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('[CLIENT] Hive Books Client Initialized');
 
-    // Check Auth
-    if (!State.user && !window.location.pathname.includes('login.html')) {
+    const path = window.location.pathname;
+
+    initAuth();
+
+    if (!State.user && !path.includes('login.html') && !path.includes('register.html')) {
         window.location.href = 'login.html';
         return;
     }
 
-    // Initialize Pages
-    initAuth();
-    initDashboard();
-    initSearch();
-    initDiscovery();
-    initNewReleases();
-    initAddBookModal();
-    initEditModal();
+    if (!path.endsWith('login.html') && !path.endsWith('register.html')) {
+        await initDashboard();
+
+        if (path.endsWith('discovery.html')) {
+            initDiscovery();
+        } else if (path.endsWith('new-releases.html')) {
+            initNewReleases();
+        } else if (path.endsWith('search.html')) {
+            initSearch();
+        }
+    }
 });
 
 /**
- * Auth Logic
+ * Auth
  */
+
 function initAuth() {
     const loginSection = document.getElementById('loginSection');
     const registerSection = document.getElementById('registerSection');
@@ -118,13 +185,36 @@ function initAuth() {
 }
 
 /**
- * Dashboard Logic
+ * Dashboard
  */
+
 async function initDashboard() {
+    // Fetch Library
+    try {
+        const res = await fetch(`/api/library`, {
+            headers: { 'Authorization': `Bearer ${State.user.token}` }
+        });
+        const data = await res.json();
+
+        if (res.status === 401 || res.status === 403) {
+            localStorage.removeItem('hive_user');
+            window.location.href = 'login.html';
+            return;
+        }
+
+        if (!res.ok) throw new Error(data.message || 'Failed to fetch library');
+
+        State.library = Array.isArray(data) ? data : [];
+    } catch (err) {
+        showToast('Failed to fetch library. Unexpected error: ' + err.message, 'error');
+        return;
+    }
+
     const libraryContainer = document.getElementById('libraryContainer');
     if (!libraryContainer) return;
 
     initAddBookModal();
+    initEditModal();
 
     // View Toggle
     const viewTableBtn = document.getElementById('viewTable');
@@ -162,26 +252,7 @@ async function initDashboard() {
         });
     }
 
-    // Fetch Library
-    try {
-        const res = await fetch(`/api/library`, {
-            headers: { 'Authorization': `Bearer ${State.user.token}` }
-        });
-        const data = await res.json();
-
-        if (res.status === 401 || res.status === 403) {
-            localStorage.removeItem('hive_user');
-            window.location.href = 'login.html';
-            return;
-        }
-
-        if (!res.ok) throw new Error(data.message || 'Failed to fetch library');
-
-        State.library = Array.isArray(data) ? data : [];
-        renderLibrary();
-    } catch (err) {
-        showToast('Failed to fetch library. Unexpected error: ' + err.message, 'error');
-    }
+    renderLibrary();
 }
 
 function renderLibrary() {
@@ -229,6 +300,48 @@ function renderLibrary() {
 }
 
 /**
+ * Helpers
+ */
+
+function isBookOwned(book) {
+    if (!book) return false;
+
+    // Try by ISBN
+    if (book.isbn) {
+        const found = State.library.find(b => b.isbn === book.isbn);
+        if (found) return true;
+    }
+
+    // Try by Title + Author
+    const normalizedTitle = book.title?.toLowerCase().trim();
+    const normalizedAuthor = book.author?.toLowerCase().trim();
+
+    if (normalizedTitle && normalizedAuthor) {
+        return State.library.some(b => {
+            const libTitle = b.title?.toLowerCase().trim();
+            const libAuthor = b.author?.toLowerCase().trim();
+
+            // Check for exact match or substring match (e.g. "Title: Subtitle" vs "Title")
+            const titleMatch = libTitle === normalizedTitle ||
+                libTitle.startsWith(normalizedTitle) ||
+                normalizedTitle.startsWith(libTitle);
+
+            const authorMatch = libAuthor === normalizedAuthor ||
+                libAuthor.includes(normalizedAuthor) ||
+                normalizedAuthor.includes(libAuthor);
+
+            return titleMatch && authorMatch;
+        });
+    }
+
+    return false;
+}
+
+function filterOwnedBooks(books) {
+    return (Array.isArray(books) ? books : []).filter(b => !isBookOwned(b));
+}
+
+/**
  * Search Logic
  */
 function initSearch() {
@@ -251,7 +364,7 @@ function initSearch() {
     searchInput.addEventListener('keypress', (e) => e.key === 'Enter' && performSearch(searchInput.value));
 
     // Show popular books
-    loadDiscovery('popularGrid');
+    renderDiscovery('popularGrid');
 }
 
 async function performSearch(query) {
@@ -293,8 +406,10 @@ async function performSearch(query) {
 
         const resultsArray = Array.isArray(data) ? data : [];
 
-        resultsList.innerHTML = resultsArray.length === 0 ? no_results_message : resultsArray.map(book => `
-            <div class="bg-gray-800 p-4 rounded-xl flex items-center border border-gray-700 hover:border-indigo-500 transition group">
+        resultsList.innerHTML = resultsArray.length === 0 ? no_results_message : resultsArray.map(book => {
+            const owned = isBookOwned(book);
+            return `
+            <div class="bg-gray-800 p-4 rounded-xl flex items-center border border-gray-700 hover:border-indigo-500 transition group" id="search-card-${book.isbn || book.title.replace(/\s+/g, '-')}">
                 ${renderThumbnail(book.thumbnail, 'w-16 h-24 rounded shadow-lg mr-6')}
                 <div class="flex-1 min-w-0">
                     <h4 class="font-bold text-lg truncate">${book.title ? (book.title.length > 24 ? book.title.slice(0, 24) + '...' : book.title) : 'Unknown Title'}</h4>
@@ -302,15 +417,15 @@ async function performSearch(query) {
                     <p class="text-xs text-gray-500 mt-1">${book.genre || 'General'} • ${book.year || 'Unknown Publication Year'}</p>
                 </div>
                 <button onclick='handleCardAdd(this, ${JSON.stringify(book).replace(/'/g, "&apos;")})' 
-                    class="action-add ml-4 bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg transition ${State.library.some(lb => lb.isbn === book.isbn) ? 'hidden' : ''}">
+                    class="action-add ml-4 bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg transition ${owned ? 'hidden' : ''}">
                     <i class="fas fa-plus"></i>
                 </button>
-                <button onclick='handleCardRemove(this, "${book.isbn}")' 
-                    class="action-remove ml-4 bg-red-600 hover:bg-red-700 p-3 rounded-lg transition ${State.library.some(lb => lb.isbn === book.isbn) ? '' : 'hidden'}">
+                <button onclick='handleCardRemove(this, "${book.isbn}", "${book.title}", "${book.author}")' 
+                    class="action-remove ml-4 bg-red-600 hover:bg-red-700 p-3 rounded-lg transition ${owned ? '' : 'hidden'}">
                     <i class="fas fa-trash"></i>
                 </button>
             </div>
-        `).join('');
+        `}).join('');
     } catch (err) {
         showToast('Failed to perform search. Unexpected error: ' + err.message, 'error');
         resultsList.innerHTML = no_results_message;
@@ -321,93 +436,214 @@ async function performSearch(query) {
  * Discovery & New Releases
  */
 async function initDiscovery() {
-    const grid = document.getElementById('discoveryGrid');
-    if (grid) loadDiscovery('discoveryGrid');
-}
+    renderDiscovery('discoveryGrid');
 
-async function initNewReleases() {
-    const grid = document.getElementById('newReleasesGrid');
-    if (!grid) return;
-
-    const no_results_message = '<p class="col-span-full text-center text-gray-500 py-10">No releases found for your favorite authors.</p>';
-
-    //Fetch and show new releases books
-    try {
-        const res = await fetch(`/api/new-releases`, {
-            headers: { 'Authorization': `Bearer ${State.user.token}` }
+    const refreshBtn = document.getElementById('refreshDiscovery');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+            renderDiscovery('discoveryGrid', true);
+            const icon = refreshBtn.querySelector('i');
+            icon.classList.add('fa-spin');
+            setTimeout(() => icon.classList.remove('fa-spin'), 1000);
         });
-        const data = await res.json();
-
-        if (res.status === 401 || res.status === 403) return;
-
-        if (!res.ok) throw new Error(data.message || 'Failed to fetch new releases');
-
-        const booksArray = Array.isArray(data) ? data : [];
-        grid.innerHTML = booksArray.map(book => createBookCard(book)).join('');
-        if (booksArray.length === 0) grid.innerHTML = no_results_message;
-    } catch (err) {
-        showToast('Failed to fetch new releases. Unexpected error: ' + err.message, 'error');
-        grid.innerHTML = no_results_message;
-    }
-
-    //Fetch and show last releases books
-    const lastReleasesContainer = document.getElementById('lastReleasesContainer');
-    if (!lastReleasesContainer) return;
-
-    try {
-        const res = await fetch(`/api/last-releases`, {
-            headers: { 'Authorization': `Bearer ${State.user.token}` }
-        });
-        const lastReleasesMap = await res.json();
-
-        const authors = Object.keys(lastReleasesMap);
-        if (authors.length === 0) {
-            lastReleasesContainer.innerHTML = no_results_message;
-            return;
-        }
-
-        lastReleasesContainer.innerHTML = authors.map(author => {
-            const releases = Array.isArray(lastReleasesMap[author]) ? lastReleasesMap[author] : [];
-            return `
-                <div class="author-section">
-                    <h3 class="text-xl font-semibold mb-6 flex items-center">
-                       <i class="fas fa-user text-indigo-400 mr-2"></i> ${author}'s Last Releases
-                    </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                        ${releases.map(book => createBookCard(book)).join('')}
-                    </div>
-                </div>
-            `;
-        }).join('');
-    } catch (err) {
-        showToast('Failed to fetch last releases. Unexpected error: ' + err.message, 'error');
-        lastReleasesContainer.innerHTML = no_results_message;
     }
 }
 
-async function loadDiscovery(elementId) {
+async function renderDiscovery(elementId, force = false) {
     const grid = document.getElementById(elementId);
     if (!grid) return;
 
-    //Fetch and show recommended books
-    try {
-        const headers = State.user ? { 'Authorization': `Bearer ${State.user.token}` } : {};
-        const res = await fetch(`/api/discovery`, { headers });
-        const data = await res.json();
+    const no_results_message = '<p class="col-span-full text-center text-gray-500 py-10">No books found for discovery.</p>';
 
-        if (res.status === 401 || res.status === 403) return;
-
-        if (!res.ok) throw new Error(data.message || 'Failed to load discovery');
-
-        let booksArray = Array.isArray(data) ? data : [];
-        if (elementId === "popularGrid") {
-            booksArray = booksArray.slice(0, 10);
-        }
-        grid.innerHTML = booksArray.map(book => createBookCard(book)).join('');
-        if (booksArray.length === 0) grid.innerHTML = '<p class="col-span-full text-center text-gray-500 py-10">No books found for discovery.</p>';
-    } catch (err) {
-        showToast('Failed to load discovery. Unexpected error: ' + err.message, 'error');
+    // Throttling for force refresh
+    if (force && !ClientCache.canRefresh('discovery')) {
+        showToast(`Slow down! You can only refresh ${State.config.refreshRateLimitPerMin} times per minute.`, 'warning');
+        return;
     }
+
+    let booksArray;
+    const cached = ClientCache.get('discovery');
+
+    // Check Cache
+    if (!force && cached) {
+        console.log('[CLIENT] Cache hit: Serving discovery from cache');
+        booksArray = cached;
+    } else {
+        // Show loading spinner
+        grid.innerHTML = '<div class="col-span-full text-center py-10"><i class="fas fa-spinner fa-spin text-3xl"></i></div>';
+
+        //Fetch discovery books
+        try {
+            const headers = State.user ? { 'Authorization': `Bearer ${State.user.token}` } : {};
+            const res = await fetch(`/api/discovery`, { headers });
+            const data = await res.json();
+
+            if (res.status === 401 || res.status === 403) return;
+
+            if (!res.ok) throw new Error(data.message || 'Failed to load discovery');
+            booksArray = Array.isArray(data) ? data : [];
+
+            // Update Cache
+            ClientCache.set('discovery', booksArray, 3600000);
+        } catch (err) {
+            showToast('Failed to fetch discovery. Unexpected error: ' + err.message, 'error');
+            grid.innerHTML = no_results_message;
+            return;
+        }
+    }
+
+    // Show discovery books
+    let filteredBooks = filterOwnedBooks(booksArray);
+    if (filteredBooks.length === 0) {
+        grid.innerHTML = no_results_message;
+        return;
+    }
+    if (elementId === "popularGrid") {
+        filteredBooks = filteredBooks.slice(0, 10);
+    }
+    grid.innerHTML = filteredBooks.map(book => createBookCard(book)).join('');
+}
+
+async function initNewReleases() {
+    renderNewReleases();
+    renderLastReleases();
+
+    const refreshNewBtn = document.getElementById('refreshNewReleases');
+    if (refreshNewBtn) {
+        refreshNewBtn.addEventListener('click', () => {
+            renderNewReleases(true);
+            const icon = refreshNewBtn.querySelector('i');
+            icon.classList.add('fa-spin');
+            setTimeout(() => icon.classList.remove('fa-spin'), 1000);
+        });
+    }
+
+    const refreshLastBtn = document.getElementById('refreshLastReleases');
+    if (refreshLastBtn) {
+        refreshLastBtn.addEventListener('click', () => {
+            renderLastReleases(true);
+            const icon = refreshLastBtn.querySelector('i');
+            icon.classList.add('fa-spin');
+            setTimeout(() => icon.classList.remove('fa-spin'), 1000);
+        });
+    }
+}
+
+async function renderNewReleases(force = false) {
+    const grid = document.getElementById('newReleasesGrid');
+    if (!grid) return;
+
+    const no_results_message = '<p class="col-span-full text-center text-gray-500 py-10">No new releases found for authors in your library.</p>';
+
+    // Throttling for force refresh
+    if (force && !ClientCache.canRefresh('new-releases')) {
+        showToast(`Slow down! You can only refresh ${State.config.refreshRateLimitPerMin} times per minute.`, 'warning');
+        return;
+    }
+
+    let booksArray;
+    const cached = ClientCache.get('new-releases');
+
+    // Check Cache
+    if (!force && cached) {
+        console.log('[CLIENT] Serving new releases from cache');
+        booksArray = cached;
+    } else {
+        // Show loading spinner
+        grid.innerHTML = '<div class="col-span-full text-center py-10"><i class="fas fa-spinner fa-spin text-3xl"></i></div>';
+
+        //Fetch new releases books
+        try {
+            const res = await fetch(`/api/new-releases`, {
+                headers: { 'Authorization': `Bearer ${State.user.token}` }
+            });
+            const data = await res.json();
+
+            if (res.status === 401 || res.status === 403) return;
+            if (!res.ok) throw new Error(data.message || 'Failed to fetch new releases');
+            booksArray = Array.isArray(data) ? data : [];
+
+            // Update Cache
+            ClientCache.set('new-releases', booksArray, 3600000);
+        } catch (err) {
+            showToast('Failed to fetch new releases. Unexpected error: ' + err.message, 'error');
+            grid.innerHTML = no_results_message;
+            return;
+        }
+    }
+
+    // Show new releases books
+    const filteredBooks = filterOwnedBooks(booksArray);
+    if (filteredBooks.length === 0) {
+        grid.innerHTML = no_results_message;
+        return;
+    }
+    grid.innerHTML = filteredBooks.map(book => createBookCard(book)).join('');
+}
+
+async function renderLastReleases(force = false) {
+    const lastReleasesContainer = document.getElementById('lastReleasesContainer');
+    if (!lastReleasesContainer) return;
+
+    const no_results_message = '<p class="col-span-full text-center text-gray-500 py-10">No releases found for your favorite authors.</p>';
+
+    // Throttling for force refresh
+    if (force && !ClientCache.canRefresh('last-releases')) {
+        showToast(`Slow down! You can only refresh ${State.config.refreshRateLimitPerMin} times per minute.`, 'warning');
+        return;
+    }
+
+    let lastReleasesMap;
+    const cached = ClientCache.get('last-releases');
+
+    // Check Cache
+    if (!force && cached) {
+        console.log('[CLIENT] Cache hit: Serving last releases from cache');
+        lastReleasesMap = cached;
+    } else {
+        // Show loading spinner
+        lastReleasesContainer.innerHTML = '<div class="col-span-full text-center py-10"><i class="fas fa-spinner fa-spin text-3xl"></i></div>';
+
+        //Fetch last releases books
+        try {
+            const res = await fetch(`/api/last-releases`, {
+                headers: { 'Authorization': `Bearer ${State.user.token}` }
+            });
+            lastReleasesMap = await res.json();
+
+            if (res.status === 401 || res.status === 403) return;
+            if (!res.ok) throw new Error(data.message || 'Failed to fetch last releases');
+
+            // Update Cache
+            ClientCache.set('last-releases', lastReleasesMap, 3600000);
+        } catch (err) {
+            showToast('Failed to fetch last releases. Unexpected error: ' + err.message, 'error');
+            lastReleasesContainer.innerHTML = no_results_message;
+            return;
+        }
+    }
+
+    // Show last releases books
+    const authors = Object.keys(lastReleasesMap);
+    if (authors.length === 0) {
+        lastReleasesContainer.innerHTML = no_results_message;
+        return;
+    }
+
+    lastReleasesContainer.innerHTML = authors.map(author => {
+        const releases = Array.isArray(lastReleasesMap[author]) ? filterOwnedBooks(lastReleasesMap[author]) : [];
+        if (releases.length === 0) return `<p class="col-span-full text-center text-gray-500 py-10">No releases found for author ${author}.</p>`;
+        return `
+            <div class="author-section">
+                <h3 class="text-xl font-semibold mb-6 flex items-center">
+                    <i class="fas fa-user text-indigo-400 mr-2"></i> ${author}'s Last Releases
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                    ${releases.map(book => createBookCard(book)).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 /**
@@ -556,6 +792,12 @@ function openEditModal(bookId) {
  * Actions
  */
 async function addBook(book) {
+    // Prevent duplicates
+    if (isBookOwned(book)) {
+        showToast('Book is already in your library!', 'info');
+        return false;
+    }
+
     try {
         const res = await fetch(`/api/books/add`, {
             method: 'POST',
@@ -576,6 +818,10 @@ async function addBook(book) {
         if (document.getElementById('libraryContainer')) {
             renderLibrary();
         }
+
+        // Clear cache
+        ClientCache.clear();
+
         return true;
     } catch (err) {
         showToast('Failed to add book. Unexpected error: ' + err.message, 'error');
@@ -600,6 +846,10 @@ async function removeBook(bookId) {
         if (document.getElementById('libraryContainer')) {
             renderLibrary();
         }
+
+        // Clear cache
+        ClientCache.clear();
+
         return true;
     } catch (err) {
         showToast('Failed to remove book. Unexpected error: ' + err.message, 'error');
@@ -658,13 +908,17 @@ function renderThumbnail(thumbnail, classes = 'w-full h-full', color = 'text-ind
 }
 
 function createBookCard(book, isLibraryCard = false) {
-    // Determine if book is already in library (for external recommendations)
-    const inLibrary = isLibraryCard || State.library.some(lb => lb.isbn === book.isbn && book.isbn);
-    const libBook = inLibrary ? State.library.find(lb => lb.isbn === book.isbn && book.isbn) : null;
-    const finalId = libBook ? libBook.id : book.id;
+    // Check if book is in library and get its ID
+    let owned = isLibraryCard;
+
+    if (!isLibraryCard) {
+        owned = isBookOwned(book);
+    }
+
+    const finalId = isLibraryCard ? book.id : (book.isbn ? book.isbn : book.title + book.author);
 
     return `
-        <div class="bg-gray-800 rounded-xl overflow-hidden border border-gray-700 hover:border-indigo-500 transition duration-300 group flex flex-col h-full" id="card-${book.id || book.isbn}">
+        <div class="bg-gray-800 rounded-xl overflow-hidden border border-gray-700 hover:border-indigo-500 transition duration-300 group flex flex-col h-full" id="card-${finalId}">
             <div class="aspect-[2/3] bg-gray-700 relative overflow-hidden">
                 ${renderThumbnail(book.thumbnail, 'w-full h-full')}
                 <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition duration-300 flex items-center justify-center">
@@ -675,11 +929,11 @@ function createBookCard(book, isLibraryCard = false) {
                             </button>
                         ` : `
                             <button onclick='handleCardAdd(this, ${JSON.stringify(book).replace(/'/g, "&apos;")})' 
-                                class="action-add bg-indigo-600 p-3 w-16 h-16 rounded-full shadow-xl hover:scale-110 transition ${inLibrary ? 'hidden' : ''}">
+                                class="action-add bg-indigo-600 p-3 w-16 h-16 rounded-full shadow-xl hover:scale-110 transition ${owned ? 'hidden' : ''}">
                                 <i class="fas fa-plus text-2xl"></i>
                             </button>
-                            <button onclick='handleCardRemove(this, "${book.isbn}")' 
-                                class="action-remove bg-red-600 p-3 w-16 h-16 rounded-full shadow-xl hover:scale-110 transition ${inLibrary ? '' : 'hidden'}">
+                            <button onclick='handleCardRemove(this, "${book.isbn}", "${book.title}", "${book.author}")' 
+                                class="action-remove bg-red-600 p-3 w-16 h-16 rounded-full shadow-xl hover:scale-110 transition ${owned ? '' : 'hidden'}">
                                 <i class="fas fa-trash text-2xl"></i>
                             </button>
                         `}
@@ -725,17 +979,28 @@ async function handleCardAdd(btn, book) {
     }
 }
 
-async function handleCardRemove(btn, isbn) {
-    const libBook = State.library.find(b => b.isbn === isbn);
-    if (!libBook) return showToast('Book not found in library', 'error');
+async function handleCardRemove(btn, isbn, title, author) {
+    // Find book in library by ISBN or title+author
+    const savedBook = State.library.find(book => {
+        if (isbn && book.isbn) {
+            return book.isbn === isbn;
+        }
+        return book.title === title && book.author === author;
+    });
+
+    if (!savedBook) {
+        return showToast('Book not found in library', 'error');
+    }
 
     const actions = btn.parentElement;
     const addBtn = actions.querySelector('.action-add');
     const removeBtn = actions.querySelector('.action-remove');
 
-    if (await removeBook(libBook.id)) {
-        removeBtn.classList.add('hidden');
-        addBtn.classList.remove('hidden');
+    if (await removeBook(savedBook.id)) {
+        if (removeBtn && addBtn) {
+            removeBtn.classList.add('hidden');
+            addBtn.classList.remove('hidden');
+        }
     }
 }
 

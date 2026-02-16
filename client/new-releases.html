@@ -49,9 +49,16 @@
 
     <!-- Main Content -->
     <main class="flex-1 p-8">
-        <header class="mb-10">
-            <h2 class="text-3xl font-bold">New Releases</h2>
-            <p class="text-gray-400">Recent books from authors in your library.</p>
+        <header class="mb-10 flex items-center justify-between">
+            <div>
+                <h2 class="text-3xl font-bold">New Releases</h2>
+                <p class="text-gray-400">Recent books from authors in your library.</p>
+            </div>
+            <button id="refreshNewReleases"
+                class="text-gray-400 font-semibold text-xl hover:text-indigo-400 transition ml-4"
+                title="Refresh New Releases">
+                <i class="fas fa-sync-alt"></i>
+            </button>
         </header>
         <section>
             <div id="newReleasesGrid" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
@@ -59,10 +66,18 @@
             </div>
         </section>
 
+        <hr class="my-10">
 
-        <header class="mb-10 mt-10">
-            <h2 class="text-3xl font-bold">Last Releases</h2>
-            <p class="text-gray-400">Last books released by your favorite authors.</p>
+        <header class="mb-10 mt-10 flex items-center justify-between">
+            <div>
+                <h2 class="text-3xl font-bold">Last Releases</h2>
+                <p class="text-gray-400">Last books released by your favorite authors.</p>
+            </div>
+            <button id="refreshLastReleases"
+                class="text-gray-400 font-semibold text-xl hover:text-indigo-400 transition ml-4"
+                title="Refresh Last Releases">
+                <i class="fas fa-sync-alt"></i>
+            </button>
         </header>
         <section id="lastReleasesContainer" class="mt-12 space-y-12">
             <!-- Last releases sections (injected) -->

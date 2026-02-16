@@ -63,6 +63,9 @@ services:
       - PORT=3004
       - ITEM_DATA_URL=http://item-data:3002
       - BOOK_METADATA_URL=http://book-metadata:3003
+      - REDIS_URL=redis://redis:6379
+      - CACHE_TTL_AUTHOR_DAYS=${CACHE_TTL_AUTHOR_DAYS}
+      - CACHE_TTL_USER_AUTHORS_MIN=${CACHE_TTL_USER_AUTHORS_MIN}
 
   recommendation:
     build:
@@ -75,6 +78,8 @@ services:
       - PORT=3005
       - ITEM_DATA_URL=http://item-data:3002
       - BOOK_METADATA_URL=http://book-metadata:3003
+      - REDIS_URL=redis://redis:6379
+      - CACHE_TTL_RECOMMENDATION_DAYS=${CACHE_TTL_RECOMMENDATION_DAYS}
 
   orchestrator:
     build:

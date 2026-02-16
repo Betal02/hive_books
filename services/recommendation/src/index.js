@@ -3,9 +3,10 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const { createClient } = require('redis');
 
 const app = express();
-const PORT = process.env.PORT || 3004;
+const PORT = process.env.PORT || 3005;
 
 app.use(helmet());
 app.use(cors());
@@ -13,6 +14,17 @@ app.use(morgan('dev'));
 app.use(express.json());
 
 const axios = require('axios');
+
+// Redis Client Initialization
+const redisClient = createClient({
+    url: process.env.REDIS_URL || 'redis://localhost:6379'
+});
+
+redisClient.on('error', (err) => console.error('[RECOMMENDATION][REDIS] Failed to connect to Redis', err));
+redisClient.connect().then(() => console.log('[RECOMMENDATION][REDIS] Connected to Redis'));
+
+// TTL Constants
+const TTL_RECOMMENDATION_DAYS = parseInt(process.env.CACHE_TTL_RECOMMENDATION_DAYS) || 1;
 
 // Health Check
 app.get('/health', (req, res) => {
@@ -22,8 +34,18 @@ app.get('/health', (req, res) => {
 // Get Recommendations for a user
 app.get('/recommendations/:user_id', async (req, res) => {
     const { user_id } = req.params;
+    const cacheKey = `recommendation:user:${user_id}`;
 
     try {
+        // 1. Check Cache
+        const cached = await redisClient.get(cacheKey);
+        if (cached) {
+            console.log(`[RECOMMENDATION] Cache Hit for user ${user_id}`);
+            return res.json(JSON.parse(cached));
+        }
+
+        console.log(`[RECOMMENDATION] Cache Miss for user ${user_id}`);
+
         // Get user's books from Item Data service
         const libraryRes = await axios.get(`${process.env.ITEM_DATA_URL}/books/${user_id}`);
         const books = libraryRes.data;
@@ -89,12 +111,13 @@ app.get('/recommendations/:user_id', async (req, res) => {
                 console.error(`[RECOMMENDATION] Failed to fetch for genre ${label}:`, err.message);
             }
         }
-
-        // Filter out books already in library
-        const existingIsbns = new Set(books.map(b => b.isbn).filter(i => i));
-        recommendations = recommendations.filter(b => !existingIsbns.has(b.isbn));
-
         console.log('[RECOMMENDATION] Recommendations:', recommendations.length);
+
+        // Cache Result
+        await redisClient.set(cacheKey, JSON.stringify(recommendations), {
+            EX: TTL_RECOMMENDATION_DAYS * 24 * 60 * 60
+        });
+
         res.json(recommendations.slice(0, 35));
     } catch (error) {
         console.error('[RECOMMENDATION] Failed to generate recommendations:', error.message);

@@ -55,8 +55,14 @@
         </header>
 
         <section class="mb-12">
-            <h3 class="text-xl font-semibold mb-6 flex items-center">
-                <i class="fas fa-book text-indigo-400 mr-2"></i> Picked for You
+            <h3 class="text-xl font-semibold mb-6 flex items-center justify-between">
+                <div class="flex items-center">
+                    <i class="fas fa-book text-indigo-400 mr-2"></i> Picked for You
+                </div>
+                <button id="refreshDiscovery" class="text-gray-400 hover:text-indigo-400 transition ml-4"
+                    title="Refresh Recommendations">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
             </h3>
             <div id="discoveryGrid" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                 <!-- Recommendations book cards (injected) -->

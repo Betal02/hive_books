@@ -3,10 +3,11 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const { createClient } = require('redis');
 const { isNewRelease } = require('./utils');
 
 const app = express();
-const PORT = process.env.PORT || 3005;
+const PORT = process.env.PORT || 3004;
 
 app.use(helmet());
 app.use(cors());
@@ -15,100 +16,78 @@ app.use(express.json());
 
 const axios = require('axios');
 
-// In-memory cache
-const cache = new Map();
-const CACHE_TTL = (process.env.CACHE_TTL_MINUTES || 60) * 60 * 1000;
+// Redis Client Initialization
+const redisClient = createClient({
+    url: process.env.REDIS_URL || 'redis://localhost:6379'
+});
+
+redisClient.on('error', (err) => console.error('[FOLLOWER][REDIS] Failed to connect to Redis', err));
+redisClient.connect().then(() => console.log('[FOLLOWER][REDIS] Connected to Redis'));
+
+// TTL Constants (Minutes)
+const TTL_USER_AUTHORS = parseInt(process.env.CACHE_TTL_USER_AUTHORS_MIN) || 60;
+const TTL_AUTHOR_DAYS = parseInt(process.env.CACHE_TTL_AUTHOR_DAYS) || 7;
 
 // Health Check
 app.get('/health', (req, res) => {
     res.json({ status: 'UP', service: 'Follower Service' });
 });
 
-// Get New Releases for authors in user's library
-app.get('/new-releases/:user_id', async (req, res) => {
-    const { user_id } = req.params;
-
-    // Check cache
-    const cacheKey = `new-releases-${user_id}`;
-    const cachedData = cache.get(cacheKey);
-    if (cachedData && cachedData.newReleases && (Date.now() - cachedData.timestamp < CACHE_TTL)) {
-        console.log(`[FOLLOWER] Cache Hit: Serving new releases for user ${user_id}`);
-
-        // Filter out books already in library and not new releases
-        const libraryRes = await axios.get(`${process.env.ITEM_DATA_URL}/books/${user_id}`);
-        const books = libraryRes.data;
-        const existingIsbns = new Set(books.map(b => b.isbn).filter(i => i));
-        const filteredNewReleases = cachedData.newReleases.filter(b => !existingIsbns.has(b.isbn));
-
-        return res.json(filteredNewReleases);
-    }
-
-    console.log(`[FOLLOWER] Cache Miss: Fetching new releases for user ${user_id}`);
+// Get New Releases for a single author
+async function getAuthorReleases(author) {
+    const cacheKey = `follower:author:${author}`;
 
     try {
-        // Get user's books from Item Data service
-        const libraryRes = await axios.get(`${process.env.ITEM_DATA_URL}/books/${user_id}`);
-        const books = libraryRes.data;
+        const cached = await redisClient.get(cacheKey);
+        if (cached) {
+            console.log(`[FOLLOWER] Cache Hit: Releases for author ${author}`);
+            return JSON.parse(cached);
+        }
+    } catch (e) {
+        console.warn(`[FOLLOWER] Redis error for ${author}:`, e.message);
+    }
 
-        if (books.length === 0) return res.json([]);
-
-        // Extract unique authors
-        const authors = books.map(b => b.author).filter(a => a);
-        const uniqueAuthors = [...new Set(authors)];
-
-        // Fetch recent books for each author
-        const releasePromises = uniqueAuthors.slice(0, 5).map(author =>
-            axios.get(`${process.env.BOOK_METADATA_URL}/search`, {
-                params: { q: `inauthor:"${author}"`, maxResults: 5, orderBy: 'newest' }
-            })
-        );
-
-        const responses = await Promise.all(releasePromises);
-
-        let newReleases = responses.flatMap(r => r.data).filter(b => isNewRelease(b.year));
-
-        // Update cache
-        cache.set(cacheKey, {
-            timestamp: Date.now(),
-            newReleases: newReleases
+    console.log(`[FOLLOWER] Cache Miss: Fetching releases for author ${author}`);
+    try {
+        const response = await axios.get(`${process.env.BOOK_METADATA_URL}/search`, {
+            params: { q: `inauthor:"${author}"`, maxResults: 5, orderBy: 'newest' }
         });
 
-        // Filter out books already in library and not new releases
-        const existingIsbns = new Set(books.map(b => b.isbn).filter(i => i));
-        const filteredNewReleases = newReleases.filter(b => !existingIsbns.has(b.isbn));
+        const books = response.data || [];
 
-        res.json(filteredNewReleases);
-    } catch (error) {
-        console.error('[FOLLOWER] Failed to fetch new releases:', error.message);
-        res.status(500).json({ error: 'Failed to fetch new releases' });
+        // Cache
+        await redisClient.set(cacheKey, JSON.stringify(books), {
+            EX: TTL_AUTHOR_DAYS * 24 * 60 * 60
+        });
+
+        return books;
+    } catch (err) {
+        console.error(`[FOLLOWER] Failed to fetch for ${author}:`, err.message);
+        return [];
     }
-});
+}
 
-// Get Last Releases for authors in user's library
-app.get('/last-releases/:user_id', async (req, res) => {
-    const { user_id } = req.params;
-    const cacheKey = `last-releases-${user_id}`;
-
-    // Check cache
-    const cachedData = cache.get(cacheKey);
-    if (cachedData && cachedData.lastReleases && (Date.now() - cachedData.timestamp < CACHE_TTL)) {
-        console.log(`[FOLLOWER] Cache Hit: Serving last releases for user ${user_id}`);
-        return res.json(cachedData.lastReleases);
-    }
-
-    console.log(`[FOLLOWER] Cache Miss: Fetching last releases for user ${user_id}`);
+// Get user's authors
+async function getUserAuthors(user_id) {
+    const cacheKey = `follower:user_authors:${user_id}`;
 
     try {
-        // Get user's books from Item Data service
-        const libraryRes = await axios.get(`${process.env.ITEM_DATA_URL}/books/${user_id}`);
-        const books = libraryRes.data;
+        const cached = await redisClient.get(cacheKey);
+        if (cached) {
+            console.log(`[FOLLOWER] Cache Hit: Authors for user ${user_id}`);
+            return JSON.parse(cached);
+        }
+    } catch (e) {
+        console.warn(`[FOLLOWER] Redis error for user ${user_id}:`, e.message);
+    }
 
-        if (books.length === 0) return res.json([]);
+    console.log(`[FOLLOWER] Cache Miss: Fetching library for user ${user_id}`);
+    try {
+        const libraryRes = await axios.get(`${process.env.ITEM_DATA_URL}/books/${user_id}`);
+        const books = libraryRes.data || [];
 
         const authors = books.map(b => b.author).filter(a => a);
-        const existingIsbns = new Set(books.map(b => b.isbn).filter(i => i));
 
-        // Rank authors by frequency
         const authorCounts = {};
         for (const a of authors) {
             authorCounts[a] = (authorCounts[a] || 0) + 1;
@@ -118,19 +97,50 @@ app.get('/last-releases/:user_id', async (req, res) => {
             .sort((a, b) => b[1] - a[1])
             .map(entry => entry[0]);
 
+        // Cache
+        await redisClient.set(cacheKey, JSON.stringify(sortedAuthors), {
+            EX: TTL_USER_AUTHORS * 60
+        });
+
+        return sortedAuthors;
+    } catch (err) {
+        console.error(`[FOLLOWER] Failed to fetch library for user ${user_id}:`, err.message);
+        throw err;
+    }
+}
+
+// Get New Releases for authors in user's library
+app.get('/new-releases/:user_id', async (req, res) => {
+    const { user_id } = req.params;
+
+    try {
+        const authors = await getUserAuthors(user_id);
+        if (authors.length === 0) return res.json([]);
+
         // Fetch recent books for each author
-        const releaseResults = await Promise.all(sortedAuthors.slice(0, 5).map(async author => {
-            try {
-                const response = await axios.get(`${process.env.BOOK_METADATA_URL}/search`, {
-                    params: { q: `inauthor:"${author}"`, maxResults: 5, orderBy: 'newest' }
-                });
-                // Filter out books already in library
-                const filteredBooks = response.data.filter(b => !existingIsbns.has(b.isbn));
-                return { author, books: filteredBooks };
-            } catch (err) {
-                console.error(`[FOLLOWER] Failed to fetch for ${author}:`, err.message);
-                return { author, books: [] };
-            }
+        const releasePromises = authors.slice(0, 8).map(author => getAuthorReleases(author));
+        const results = await Promise.all(releasePromises);
+
+        let newReleases = results.flatMap(books => books).filter(b => isNewRelease(b.year));
+
+        res.json(newReleases);
+    } catch (error) {
+        console.error('[FOLLOWER] Failed to fetch new releases:', error.message);
+        res.status(500).json({ error: 'Failed to fetch new releases' });
+    }
+});
+
+// Get Last Releases for authors in user's library
+app.get('/last-releases/:user_id', async (req, res) => {
+    const { user_id } = req.params;
+
+    try {
+        const authors = await getUserAuthors(user_id);
+        if (authors.length === 0) return res.json([]);
+
+        const releaseResults = await Promise.all(authors.slice(0, 5).map(async author => {
+            const books = await getAuthorReleases(author);
+            return { author, books };
         }));
 
         const lastReleases = {};
@@ -140,16 +150,10 @@ app.get('/last-releases/:user_id', async (req, res) => {
             }
         });
 
-        // Update cache
-        cache.set(cacheKey, {
-            timestamp: Date.now(),
-            lastReleases: lastReleases
-        });
-
         res.json(lastReleases);
     } catch (error) {
-        console.error('[FOLLOWER] Failed to fetch new releases:', error.message);
-        res.status(500).json({ error: 'Failed to fetch new releases' });
+        console.error('[FOLLOWER] Failed to fetch last releases:', error.message);
+        res.status(500).json({ error: 'Failed to fetch last releases' });
     }
 });
 
