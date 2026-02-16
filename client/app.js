@@ -518,7 +518,7 @@ function initEditModal() {
             hideModal();
 
             // Refresh
-            initDashboard(); //TODO remember view option togled
+            initDashboard();
         } catch (err) {
             showToast(err.message, 'error');
         } finally {
@@ -664,7 +664,7 @@ function createBookCard(book, isLibraryCard = false) {
     const finalId = libBook ? libBook.id : book.id;
 
     return `
-        <div class="bg-gray-800 rounded-xl overflow-hidden border border-gray-700 hover:border-indigo-500 transition duration-300 group flex flex-col h-full" id="card-${book.isbn || book.id}">
+        <div class="bg-gray-800 rounded-xl overflow-hidden border border-gray-700 hover:border-indigo-500 transition duration-300 group flex flex-col h-full" id="card-${book.id || book.isbn}">
             <div class="aspect-[2/3] bg-gray-700 relative overflow-hidden">
                 ${renderThumbnail(book.thumbnail, 'w-full h-full')}
                 <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition duration-300 flex items-center justify-center">
@@ -704,9 +704,9 @@ function createBookCard(book, isLibraryCard = false) {
  * Card Action Handlers
  */
 async function handleCardAdd(btn, book) {
-    const card = btn.closest('[id^="card-"]');
-    const addBtn = card.querySelector('.action-add');
-    const removeBtn = card.querySelector('.action-remove');
+    const actions = btn.parentElement;
+    const addBtn = actions.querySelector('.action-add');
+    const removeBtn = actions.querySelector('.action-remove');
 
     try {
         addBtn.disabled = true;
@@ -729,9 +729,9 @@ async function handleCardRemove(btn, isbn) {
     const libBook = State.library.find(b => b.isbn === isbn);
     if (!libBook) return showToast('Book not found in library', 'error');
 
-    const card = btn.closest('[id^="card-"]');
-    const addBtn = card.querySelector('.action-add');
-    const removeBtn = card.querySelector('.action-remove');
+    const actions = btn.parentElement;
+    const addBtn = actions.querySelector('.action-add');
+    const removeBtn = actions.querySelector('.action-remove');
 
     if (await removeBook(libBook.id)) {
         removeBtn.classList.add('hidden');
@@ -824,6 +824,46 @@ function showConfirm({
     });
 }
 
+/**
+ *  Table actions
+ */
+
+function sortTable(tableId, n) {
+    var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+    table = document.getElementById(tableId);
+    switching = true;
+    dir = "asc";
+    while (switching) {
+        switching = false;
+        rows = table.rows;
+        for (i = 1; i < (rows.length - 1); i++) {
+            shouldSwitch = false;
+            x = rows[i].getElementsByTagName("TD")[n];
+            y = rows[i + 1].getElementsByTagName("TD")[n];
+            if (dir == "asc") {
+                if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
+                    shouldSwitch = true;
+                    break;
+                }
+            } else if (dir == "desc") {
+                if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
+                    shouldSwitch = true;
+                    break;
+                }
+            }
+        }
+        if (shouldSwitch) {
+            rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+            switching = true;
+            switchcount++;
+        } else {
+            if (switchcount == 0 && dir == "asc") {
+                dir = "desc";
+                switching = true;
+            }
+        }
+    }
+}
 
 // Global onclick handlers
 window.addBook = addBook;
@@ -831,3 +871,4 @@ window.removeBook = removeBook;
 window.openEditModal = openEditModal;
 window.handleCardAdd = handleCardAdd;
 window.handleCardRemove = handleCardRemove;
+window.sortTable = sortTable;

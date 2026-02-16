@@ -32,6 +32,7 @@ services:
     environment:
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
+      - CACHE_TTL_MINUTES=1
 
   recommendation:
     command: npm run dev

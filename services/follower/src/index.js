@@ -17,8 +17,7 @@ const axios = require('axios');
 
 // In-memory cache
 const cache = new Map();
-//const CACHE_TTL = (process.env.CACHE_TTL_MINUTES || 60) * 60 * 1000; TODO use this after DEV
-const CACHE_TTL = 30000;
+const CACHE_TTL = (process.env.CACHE_TTL_MINUTES || 60) * 60 * 1000;
 
 // Health Check
 app.get('/health', (req, res) => {
@@ -30,11 +29,18 @@ app.get('/new-releases/:user_id', async (req, res) => {
     const { user_id } = req.params;
 
     // Check cache
-    const cachedData = cache.get(user_id);
+    const cacheKey = `new-releases-${user_id}`;
+    const cachedData = cache.get(cacheKey);
     if (cachedData && cachedData.newReleases && (Date.now() - cachedData.timestamp < CACHE_TTL)) {
-        console.log(`[FOLLOWER] Serving cached releases for user ${user_id}`);
-        return res.json(cachedData.newReleases);
+        console.log(`[FOLLOWER] Cache Hit: Serving new releases for user ${user_id}`);
+
+        // Filter out books already in library and not new releases
+        const existingIsbns = new Set(books.map(b => b.isbn).filter(i => i));
+        const filteredNewReleases = cachedData.newReleases.filter(b => !existingIsbns.has(b.isbn) && isNewRelease(b.publishedDate));
+        return res.json(filteredNewReleases);
     }
+
+    console.log(`[FOLLOWER] Cache Miss: Fetching new releases for user ${user_id}`);
 
     try {
         // Get user's books from Item Data service
@@ -55,35 +61,38 @@ app.get('/new-releases/:user_id', async (req, res) => {
         );
 
         const responses = await Promise.all(releasePromises);
-        let allReleases = responses.flatMap(r => r.data);
-
-        // Filter out books already in library and not new releases
-        const existingIsbns = new Set(books.map(b => b.isbn).filter(i => i));
-        const newReleases = allReleases.filter(b => !existingIsbns.has(b.isbn) && isNewRelease(b.publishedDate));
+        let newReleases = responses.flatMap(r => r.data);
 
         // Update cache
-        cache.set(user_id, {
+        cache.set(cacheKey, {
             timestamp: Date.now(),
             newReleases: newReleases
         });
 
-        res.json(newReleases);
+        // Filter out books already in library and not new releases
+        const existingIsbns = new Set(books.map(b => b.isbn).filter(i => i));
+        const filteredNewReleases = newReleases.filter(b => !existingIsbns.has(b.isbn) && isNewRelease(b.publishedDate));
+
+        res.json(filteredNewReleases);
     } catch (error) {
         console.error('[FOLLOWER] Failed to fetch new releases:', error.message);
         res.status(500).json({ error: 'Failed to fetch new releases' });
     }
 });
 
-// Get New Releases for authors in user's library
+// Get Last Releases for authors in user's library
 app.get('/last-releases/:user_id', async (req, res) => {
     const { user_id } = req.params;
+    const cacheKey = `last-releases-${user_id}`;
 
     // Check cache
-    const cachedData = cache.get(user_id);
+    const cachedData = cache.get(cacheKey);
     if (cachedData && cachedData.lastReleases && (Date.now() - cachedData.timestamp < CACHE_TTL)) {
-        console.log(`[FOLLOWER] Serving cached releases for user ${user_id}`);
+        console.log(`[FOLLOWER] Cache Hit: Serving last releases for user ${user_id}`);
         return res.json(cachedData.lastReleases);
     }
+
+    console.log(`[FOLLOWER] Cache Miss: Fetching last releases for user ${user_id}`);
 
     try {
         // Get user's books from Item Data service
@@ -128,7 +137,7 @@ app.get('/last-releases/:user_id', async (req, res) => {
         });
 
         // Update cache
-        cache.set(user_id, {
+        cache.set(cacheKey, {
             timestamp: Date.now(),
             lastReleases: lastReleases
         });

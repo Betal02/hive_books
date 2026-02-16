@@ -126,21 +126,51 @@ app.get('/nyt/:category', async (req, res) => {
     }
 
     try {
-        const response = await axios.get(
-            `${process.env.NYT_API_URL}${genre.nyt}.json`,
-            {
-                params: {
-                    'api-key': process.env.NYT_API_KEY
-                }
-            }
-        );
+        const cacheKey = `nyt_cache:${genre.nyt}`;
+        const isSunday = new Date().getDay() === 0;
+        const imgExpirationTime = isSunday ? 60 * 60 * 24 * 1 : 60 * 60 * 24 * 3;
 
-        const items = response.data.results.books || [];
-        const normalized = items.map(item => normalizeNYTBook(item, genre.label));
+        // Check Redis Cache
+        const cachedData = await redisClient.get(cacheKey);
+
+        if (cachedData) {
+            try {
+                console.log(`[METADATA][REDIS] Cache Hit: ${cacheKey} (${cachedData.length} bytes)`);
+                const data = JSON.parse(cachedData);
+                return res.json(data);
+            } catch (e) {
+                console.warn(`[METADATA][REDIS] Cache decoding error for ${cacheKey}:`, e.message);
+            }
+        }
+
+        // Fetch from source
+        console.log(`[METADATA][REDIS] Cache Miss: Fetching NYT endpoint ${genre.nyt}`);
+        let normalized;
+        try {
+            const response = await axios.get(
+                `${process.env.NYT_API_URL}${genre.nyt}.json`,
+                {
+                    params: {
+                        'api-key': process.env.NYT_API_KEY
+                    }
+                }
+            );
+
+            const items = response.data.results.books || [];
+            normalized = items.map(item => normalizeNYTBook(item, genre.label));
+        } catch (error) {
+            console.error('[METADATA] Failed to fetch data from NYT API:', error.message);
+            return res.status(500).json({ message: 'Failed to fetch data from NYT API', error: error.message });
+        }
+
+        // Store in Redis Cache
+        await redisClient.set(cacheKey, JSON.stringify(normalized), {
+            EX: imgExpirationTime
+        });
+
         res.json(normalized);
     } catch (error) {
-        console.error('[METADATA] Failed to fetch data from NYT API:', error.message);
-        res.status(500).json({ message: 'Failed to fetch data from NYT API', error: error.message });
+        console.error('[METADATA][REDIS] Error:', error.message);
     }
 });
 
@@ -164,9 +194,10 @@ app.get('/proxy-image', async (req, res) => {
     try {
         const urlHash = crypto.createHash('sha256').update(imageUrl).digest('hex');
         const cacheKey = `img_cache:${urlHash}`;
+        const imgExpirationTime = 60 * 60 * 24 * 1;
 
         // Check Redis Cache
-        const cachedData = await redisClient.get(cacheKey);
+        const cachedData = await redisClient.getEx(cacheKey, { EX: imgExpirationTime });
 
         if (cachedData) {
             try {
@@ -191,7 +222,7 @@ app.get('/proxy-image', async (req, res) => {
 
         // Store as Base64
         await redisClient.set(cacheKey, buffer.toString('base64'), {
-            EX: 60 * 60 * 24 * 7 // 7 days expiration TODO make it shorter and maybe reset it if requested?
+            EX: imgExpirationTime
         });
 
         res.type('image/jpeg').send(buffer);
