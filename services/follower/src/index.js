@@ -35,8 +35,11 @@ app.get('/new-releases/:user_id', async (req, res) => {
         console.log(`[FOLLOWER] Cache Hit: Serving new releases for user ${user_id}`);
 
         // Filter out books already in library and not new releases
+        const libraryRes = await axios.get(`${process.env.ITEM_DATA_URL}/books/${user_id}`);
+        const books = libraryRes.data;
         const existingIsbns = new Set(books.map(b => b.isbn).filter(i => i));
-        const filteredNewReleases = cachedData.newReleases.filter(b => !existingIsbns.has(b.isbn) && isNewRelease(b.publishedDate));
+        const filteredNewReleases = cachedData.newReleases.filter(b => !existingIsbns.has(b.isbn));
+
         return res.json(filteredNewReleases);
     }
 
@@ -61,7 +64,8 @@ app.get('/new-releases/:user_id', async (req, res) => {
         );
 
         const responses = await Promise.all(releasePromises);
-        let newReleases = responses.flatMap(r => r.data);
+
+        let newReleases = responses.flatMap(r => r.data).filter(b => isNewRelease(b.year));
 
         // Update cache
         cache.set(cacheKey, {
@@ -71,7 +75,7 @@ app.get('/new-releases/:user_id', async (req, res) => {
 
         // Filter out books already in library and not new releases
         const existingIsbns = new Set(books.map(b => b.isbn).filter(i => i));
-        const filteredNewReleases = newReleases.filter(b => !existingIsbns.has(b.isbn) && isNewRelease(b.publishedDate));
+        const filteredNewReleases = newReleases.filter(b => !existingIsbns.has(b.isbn));
 
         res.json(filteredNewReleases);
     } catch (error) {
