@@ -51,34 +51,30 @@ hive_books/
 ```
 
 
+## Architecture Flowchart 
+
 ```mermaid
-
 flowchart TD
-
-    UI[Client UI]
+	UI[Client UI]
+	IMC[("In-memory Cache")]
 
     subgraph "Process Centric Layer"
         OS[Orchestrator Service]
     end
-
-
+    
     subgraph "Business Logic Layer"
         RS[Recommendation Service]
         FS[Follower Service]
-
-        IMC[("In-memory Cache")]
     end
-
-  
-    subgraph "Adapter Layer"
+	
+	subgraph "Adapter Layer"
         MA[Book Metadata Service]
-
-        R[(Redis Cache)]
 
         GBA([Google Books API])
         NYT([New York Times API])
     end
-  
+    
+    R[(Redis Cache)]
 
     subgraph "Data Layer"
         UDS[User Data Service]
@@ -92,10 +88,10 @@ flowchart TD
     UDS --> UDB
 
     UI -->|REST + JWT| OS
+    UI <--> IMC
 
     OS -->|REST| UDS
     OS -->|REST| IDS
-    OS -->|REST| MA
     OS -->|REST| RS
     OS -->|REST| FS
 
@@ -104,15 +100,16 @@ flowchart TD
 
     FS -->|REST| IDS
     FS -->|REST| MA
+    
+    OS -->|REST| MA
 
-    RS <--> IMC
-    FS <--> IMC
+    RS <--> R
+    FS <--> R
 
-    MA -->|REST| GBA
-    MA -->|REST| NYT
+    MA -->|REST| GBA
+    MA -->|REST| NYT
 
-    MA <--> R
-
+    MA <--> R
 ```
 
 ## 📚 Tech & Tools
@@ -135,3 +132,5 @@ flowchart TD
 ### External APIs
 - **Google Books API**: Primary source for book metadata and search functionality.
 - **New York Times API**: Secondary source for book metadata and search functionality.
+
+For more info see the dedicated file [DOCUMENTATION.md](DOCUMENTATION.md).
