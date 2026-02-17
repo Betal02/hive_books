@@ -65,7 +65,7 @@ const GENRE_MAPPING = {
         label: "Trending",
         nyt: "combined-print-and-e-book-fiction",
         googleSubjects: [
-            "subject:fiction" // TODO: maybe add more? 
+            "subject:fiction"
         ]
     },
 

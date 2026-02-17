@@ -18,10 +18,10 @@ const ClientCache = {
     data: {},
     refreshCounts: {},
 
-    set(key, value, ttlMs) {
+    set(key, value) {
         this.data[key] = {
             value,
-            expiry: Date.now() + ttlMs
+            expiry: Date.now() + (60 * 60 * 1000)
         };
     },
 
@@ -483,7 +483,7 @@ async function renderDiscovery(elementId, force = false) {
             booksArray = Array.isArray(data) ? data : [];
 
             // Update Cache
-            ClientCache.set('discovery', booksArray, 3600000);
+            ClientCache.set('discovery', booksArray);
         } catch (err) {
             showToast('Failed to fetch discovery. Unexpected error: ' + err.message, 'error');
             grid.innerHTML = no_results_message;
@@ -563,7 +563,7 @@ async function renderNewReleases(force = false) {
             booksArray = Array.isArray(data) ? data : [];
 
             // Update Cache
-            ClientCache.set('new-releases', booksArray, 3600000);
+            ClientCache.set('new-releases', booksArray);
         } catch (err) {
             showToast('Failed to fetch new releases. Unexpected error: ' + err.message, 'error');
             grid.innerHTML = no_results_message;
@@ -614,7 +614,7 @@ async function renderLastReleases(force = false) {
             if (!res.ok) throw new Error(data.message || 'Failed to fetch last releases');
 
             // Update Cache
-            ClientCache.set('last-releases', lastReleasesMap, 3600000);
+            ClientCache.set('last-releases', lastReleasesMap);
         } catch (err) {
             showToast('Failed to fetch last releases. Unexpected error: ' + err.message, 'error');
             lastReleasesContainer.innerHTML = no_results_message;

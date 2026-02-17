@@ -170,7 +170,7 @@ app.get('/api/proxy-image', async (req, res) => {
   // Fetch book thumbnail from Book Metadata service
   try {
     const metadataUrl = `${process.env.BOOK_METADATA_URL}/proxy-image`;
-    console.log(`[ORCHESTRATOR] Proxying to: ${metadataUrl} with url=${url}`);
+    if (process.env.LOGS_PROXY_IMAGE === "1") console.log(`[ORCHESTRATOR] Proxying to: ${metadataUrl} with url=${url}`);
 
     const response = await axios.get(metadataUrl, {
       params: req.query,

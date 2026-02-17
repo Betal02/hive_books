@@ -24,9 +24,9 @@ const redisClient = createClient({
 redisClient.on('error', (err) => console.error('[FOLLOWER][REDIS] Failed to connect to Redis', err));
 redisClient.connect().then(() => console.log('[FOLLOWER][REDIS] Connected to Redis'));
 
-// TTL Constants (Minutes)
-const TTL_USER_AUTHORS = parseInt(process.env.CACHE_TTL_USER_AUTHORS_MIN) || 60;
-const TTL_AUTHOR_DAYS = parseInt(process.env.CACHE_TTL_AUTHOR_DAYS) || 7;
+// TTL Constants
+const TTL_USER_AUTHORS = (parseInt(process.env.CACHE_TTL_USER_AUTHORS_MIN) || 60) * 60;
+const TTL_AUTHOR = (parseInt(process.env.CACHE_TTL_AUTHOR_MIN) || 7 * 24 * 60) * 60;
 
 // Health Check
 app.get('/health', (req, res) => {
@@ -57,7 +57,7 @@ async function getAuthorReleases(author) {
 
         // Cache
         await redisClient.set(cacheKey, JSON.stringify(books), {
-            EX: TTL_AUTHOR_DAYS * 24 * 60 * 60
+            EX: TTL_AUTHOR
         });
 
         return books;
@@ -99,7 +99,7 @@ async function getUserAuthors(user_id) {
 
         // Cache
         await redisClient.set(cacheKey, JSON.stringify(sortedAuthors), {
-            EX: TTL_USER_AUTHORS * 60
+            EX: TTL_USER_AUTHORS
         });
 
         return sortedAuthors;

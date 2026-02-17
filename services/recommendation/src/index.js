@@ -24,7 +24,7 @@ redisClient.on('error', (err) => console.error('[RECOMMENDATION][REDIS] Failed t
 redisClient.connect().then(() => console.log('[RECOMMENDATION][REDIS] Connected to Redis'));
 
 // TTL Constants
-const TTL_RECOMMENDATION_DAYS = parseInt(process.env.CACHE_TTL_RECOMMENDATION_DAYS) || 1;
+const TTL_RECOMMENDATION = (parseInt(process.env.CACHE_TTL_RECOMMENDATION) || 24 * 60) * 60;
 
 // Health Check
 app.get('/health', (req, res) => {
@@ -115,7 +115,7 @@ app.get('/recommendations/:user_id', async (req, res) => {
 
         // Cache Result
         await redisClient.set(cacheKey, JSON.stringify(recommendations), {
-            EX: TTL_RECOMMENDATION_DAYS * 24 * 60 * 60
+            EX: TTL_RECOMMENDATION
         });
 
         res.json(recommendations.slice(0, 35));

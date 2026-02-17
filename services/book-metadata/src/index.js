@@ -38,13 +38,13 @@ app.get('/health', (req, res) => {
 });
 
 // Helper: Fetch with Retry and Throttling
-async function fetchWithRetry(url, retries = 3) { //TODO move in utils.js?
+async function fetchWithRetry(url, retries = 3) {
     try {
         return await limiter.schedule(() => axios.get(url, {
             responseType: 'arraybuffer',
             timeout: 10000,
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' //TODO si può rimuovere?
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
         }));
     } catch (err) {
@@ -182,7 +182,10 @@ app.get('/genres/:label', (req, res) => {
     const genreKey = getGenreFromLabel(req.params.label);
     if (!genreKey) return res.status(404).json({ error: 'Genre not found' });
     res.json({ key: genreKey, ...getGenre(genreKey) });
-});
+})
+
+// TTL Constants
+const TTL_THUMBNAIL = (parseInt(process.env.CACHE_TTL_THUMBNAIL_MIN) || 24 * 60) * 60;
 
 /**
  * Image Proxy (with Redis)
@@ -194,10 +197,9 @@ app.get('/proxy-image', async (req, res) => {
     try {
         const urlHash = crypto.createHash('sha256').update(imageUrl).digest('hex');
         const cacheKey = `img_cache:${urlHash}`;
-        const imgExpirationTime = 60 * 60 * 24 * 1;
 
         // Check Redis Cache
-        const cachedData = await redisClient.getEx(cacheKey, { EX: imgExpirationTime });
+        const cachedData = await redisClient.getEx(cacheKey, { EX: TTL_THUMBNAIL });
 
         if (cachedData) {
             try {
@@ -206,24 +208,22 @@ app.get('/proxy-image', async (req, res) => {
 
                 // Validate JPEG magic bytes (FF D8)
                 if (buffer.length > 2 && buffer[0] === 0xFF && buffer[1] === 0xD8) {
-                    console.log(`[METADATA][REDIS] Cache Hit: ${urlHash} (${buffer.length} bytes)`);
+                    if (process.env.LOGS_PROXY_IMAGE === "1") console.log(`[METADATA][REDIS] Cache Hit: ${urlHash} (${buffer.length} bytes)`);
                     return res.type('image/jpeg').send(buffer);
                 }
-                console.warn(`[METADATA][REDIS] Corrupted image in cache for ${urlHash}, re-fetching...`);
+                if (process.env.LOGS_PROXY_IMAGE === "1") console.warn(`[METADATA][REDIS] Corrupted image in cache for ${urlHash}, re-fetching...`);
             } catch (e) {
-                console.warn(`[METADATA][REDIS] Cache decoding error for ${urlHash}:`, e.message);
+                if (process.env.LOGS_PROXY_IMAGE === "1") console.warn(`[METADATA][REDIS] Cache decoding error for ${urlHash}:`, e.message);
             }
         }
 
         // Fetch from source
-        console.log(`[METADATA][REDIS] Cache Miss: Fetching ${imageUrl}`);
+        if (process.env.LOGS_PROXY_IMAGE === "1") console.log(`[METADATA][REDIS] Cache Miss: Fetching ${imageUrl}`);
         const response = await fetchWithRetry(imageUrl);
         const buffer = Buffer.from(response.data);
 
         // Store as Base64
-        await redisClient.set(cacheKey, buffer.toString('base64'), {
-            EX: imgExpirationTime
-        });
+        await redisClient.set(cacheKey, buffer.toString('base64'), { EX: TTL_THUMBNAIL });
 
         res.type('image/jpeg').send(buffer);
 

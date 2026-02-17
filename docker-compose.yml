@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
   redis:
     image: redis:alpine
     container_name: hive-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT}:${REDIS_PORT}"
     restart: always
 
   book-metadata:
@@ -14,14 +12,16 @@ services:
       dockerfile: ./services/book-metadata/Dockerfile
     container_name: book-metadata
     ports:
-      - "3003:3003"
+      - "${BOOK_METADATA_PORT}:${BOOK_METADATA_PORT}"
     environment:
-      - PORT=3003
+      - PORT=${BOOK_METADATA_PORT}
       - GOOGLE_BOOKS_API_URL=${GOOGLE_BOOKS_API_URL}
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY}
       - NYT_API_URL=${NYT_API_URL}
       - NYT_API_KEY=${NYT_API_KEY}
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=${REDIS_URL}
+      - CACHE_TTL_THUMBNAIL_MIN=${CACHE_TTL_THUMBNAIL_MIN}
+      - LOGS_PROXY_IMAGE=${LOGS_PROXY_IMAGE}
     depends_on:
       - redis
 
@@ -31,10 +31,10 @@ services:
       dockerfile: ./services/user-data/Dockerfile
     container_name: user-data
     ports:
-      - "3001:3001"
+      - "${USER_DATA_PORT}:${USER_DATA_PORT}"
     environment:
-      - PORT=3001
-      - DB_PATH=/usr/src/app/data/users.db
+      - PORT=${USER_DATA_PORT}
+      - DB_PATH=${USER_DB_PATH}
       - ACCESS_JWT_SECRET=${ACCESS_JWT_SECRET}
     volumes:
       - ./services/user-data/data:/usr/src/app/data
@@ -45,10 +45,10 @@ services:
       dockerfile: ./services/item-data/Dockerfile
     container_name: item-data
     ports:
-      - "3002:3002"
+      - "${ITEM_DATA_PORT}:${ITEM_DATA_PORT}"
     environment:
-      - PORT=3002
-      - DB_PATH=/usr/src/app/data/items.db
+      - PORT=${ITEM_DATA_PORT}
+      - DB_PATH=${ITEM_DB_PATH}
     volumes:
       - ./services/item-data/data:/usr/src/app/data
 
@@ -58,13 +58,13 @@ services:
       dockerfile: ./services/follower/Dockerfile
     container_name: follower
     ports:
-      - "3004:3004"
+      - "${FOLLOWER_PORT}:${FOLLOWER_PORT}"
     environment:
-      - PORT=3004
-      - ITEM_DATA_URL=http://item-data:3002
-      - BOOK_METADATA_URL=http://book-metadata:3003
-      - REDIS_URL=redis://redis:6379
-      - CACHE_TTL_AUTHOR_DAYS=${CACHE_TTL_AUTHOR_DAYS}
+      - PORT=${FOLLOWER_PORT}
+      - ITEM_DATA_URL=${ITEM_DATA_URL}
+      - BOOK_METADATA_URL=${BOOK_METADATA_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CACHE_TTL_AUTHOR_MIN=${CACHE_TTL_AUTHOR_MIN}
       - CACHE_TTL_USER_AUTHORS_MIN=${CACHE_TTL_USER_AUTHORS_MIN}
 
   recommendation:
@@ -73,13 +73,13 @@ services:
       dockerfile: ./services/recommendation/Dockerfile
     container_name: recommendation
     ports:
-      - "3005:3005"
+      - "${RECOMMENDATION_PORT}:${RECOMMENDATION_PORT}"
     environment:
-      - PORT=3005
-      - ITEM_DATA_URL=http://item-data:3002
-      - BOOK_METADATA_URL=http://book-metadata:3003
-      - REDIS_URL=redis://redis:6379
-      - CACHE_TTL_RECOMMENDATION_DAYS=${CACHE_TTL_RECOMMENDATION_DAYS}
+      - PORT=${RECOMMENDATION_PORT}
+      - ITEM_DATA_URL=${ITEM_DATA_URL}
+      - BOOK_METADATA_URL=${BOOK_METADATA_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CACHE_TTL_RECOMMENDATION_MIN=${CACHE_TTL_RECOMMENDATION_MIN}
 
   orchestrator:
     build:
@@ -87,17 +87,18 @@ services:
       dockerfile: ./services/orchestrator/Dockerfile
     container_name: orchestrator
     ports:
-      - "3000:3000"
+      - "${ORCHESTRATOR_PORT}:${ORCHESTRATOR_PORT}"
     volumes:
       - ./client:/usr/src/app/client
     environment:
-      - PORT=3000
-      - USER_DATA_URL=http://user-data:3001
-      - ITEM_DATA_URL=http://item-data:3002
-      - BOOK_METADATA_URL=http://book-metadata:3003
-      - RECOMMENDATION_URL=http://recommendation:3005
-      - FOLLOWER_URL=http://follower:3004
+      - PORT=${ORCHESTRATOR_PORT}
+      - USER_DATA_URL=${USER_DATA_URL}
+      - ITEM_DATA_URL=${ITEM_DATA_URL}
+      - BOOK_METADATA_URL=${BOOK_METADATA_URL}
+      - FOLLOWER_URL=${FOLLOWER_URL}
+      - RECOMMENDATION_URL=${RECOMMENDATION_URL}
       - ACCESS_JWT_SECRET=${ACCESS_JWT_SECRET}
+      - LOGS_PROXY_IMAGE=${LOGS_PROXY_IMAGE}
     depends_on:
       - user-data
       - item-data
